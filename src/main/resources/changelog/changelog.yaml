@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: 001__create_initial.sql
+      relativeToChangelogFile: true

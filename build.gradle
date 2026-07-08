@@ -1,12 +1,22 @@
+buildscript {
+	dependencies {
+		classpath("org.liquibase:liquibase-core:5.0.1")
+	}
+}
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'org.graalvm.buildtools.native' version '1.1.1'
+	id 'org.liquibase.gradle' version '3.1.0'
+	id 'checkstyle'
+	id 'jacoco'
+	id 'groovy'
 }
 
 group = 'com.api.identity'
-version = '0.0.1-SNAPSHOT'
+version = '1.0.0'
 
 java {
 	toolchain {
@@ -14,20 +24,182 @@ java {
 	}
 }
 
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+checkstyle {
+	configFile = file("$rootDir/checkstyle/checkstyle.xml")
+	toolVersion = "12.1.2"
+}
+
+checkstyleMain {
+	source = 'src/main/java'
+}
+
 repositories {
 	mavenCentral()
 }
 
+ext {
+	mapstructVersion = '1.6.3'
+	testcontainersVersion = '1.21.3'
+	springModulithVersion = "2.1.0"
+}
+
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-security'
+	// Spring Boot Starters
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
+	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
+	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
-	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+
+	// OpenAPI/Swagger
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+	//Logs
+	implementation 'org.apache.commons:commons-text:1.14.0'
+
+	// Cache
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+
+	// Database
+	runtimeOnly 'com.mysql:mysql-connector-j'
+
+	// Liquibase
+	implementation 'org.springframework.boot:spring-boot-starter-liquibase'
+
+
+	// Lombok + MapStruct (orden importante)
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	implementation "org.mapstruct:mapstruct:1.6.3"
+	annotationProcessor "org.mapstruct:mapstruct-processor:1.6.3"
+	testAnnotationProcessor "org.mapstruct:mapstruct-processor:1.6.3"
+
+	// Observability
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+
+	// Testing
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.springframework.security:spring-security-test'
+
+	testImplementation 'org.spockframework:spock-core:2.4-groovy-5.0'
+	testImplementation 'org.spockframework:spock-spring:2.4-groovy-5.0'
+	testImplementation 'org.apache.groovy:groovy:5.0.4'
+	testImplementation 'org.apache.groovy:groovy-json:5.0.4'
+	testImplementation 'org.mock-server:mockserver-junit-jupiter:5.15.0'
+
+	// Testcontainers
+	testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+	testImplementation "org.testcontainers:mysql:${testcontainersVersion}"
+
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'org.mockito:mockito-core:5.20.0'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// Configuración de encoding
+	systemProperty 'file.encoding', 'UTF-8'
+
+	// Performance
+	// Los tests de integración levantan un contenedor MySQL + contexto Spring completo
+	// por fork (el @Shared static container no se comparte entre JVMs distintas).
+	// Con cores/2 en máquinas de muchos cores esto multiplica contenedores y satura RAM/disco.
+	maxParallelForks = Math.min(2, Runtime.runtime.availableProcessors().intdiv(2) ?: 1)
+
+	// Logging mejorado
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+		exceptionFormat 'full'
+		showStandardStreams = false
+		showCauses = true
+		showStackTraces = true
+	}
+}
+tasks.matching { it.name in ['checkstyleAot', 'checkstyleAotTest'] }.configureEach {
+	enabled = false
+}
+tasks.register("printVersion") {
+	doLast {
+		println(project.version.toString().trim())
+	}
+}
+tasks.withType(Test).configureEach {
+	reports.html.required = false
+	reports.junitXml.required = true
+}
+
+springBoot {
+	buildInfo()
+}
+
+
+jar {
+	enabled = false
+}
+
+
+// Configuración de compilación
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.compilerArgs += [
+			'-parameters',
+			'-Xlint:unchecked',
+			'-Xlint:deprecation'
+	]
+}
+
+test {
+	finalizedBy jacocoTestReport
+}
+
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+	}
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, excludes: [
+					"com/api/identity/configuration/**",
+					"com/api/identity/UserApplication*"
+			])
+		}))
+	}
+}
+
+sourceSets {
+	main {
+		java {
+			srcDirs = ['src/main/java']
+		}
+	}
+
+	test {
+		java {
+			srcDirs = ['src/test/java']
+		}
+		groovy {
+			srcDirs = ['src/test/groovy']
+		}
+		resources {
+			srcDirs = ['src/test/resources']
+		}
+	}
 }

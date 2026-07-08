@@ -1,0 +1,74 @@
+server:
+  port: ${PORT:8081}
+  forward-headers-strategy: framework
+  http2:
+    enabled: true
+
+app:
+  storage:
+    base-path: ${STORAGE_BASE_PATH:/mnt/storage}
+
+jwt:
+  auth:
+    converter:
+      principle-attribute: email
+      resource-id: admin-m2
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  application:
+    name: api-identity
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        generate_statistics: false
+        jdbc:
+          time_zone: UTC
+  jackson:
+    time-zone: UTC
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KC_URL_REALM}
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/changelog.yaml
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.hibernate: WARN
+    org.hibernate.engine.jdbc.env.internal: ERROR
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /docs
+    enabled: true
+    disable-swagger-default-url: true
+    try-it-out-enabled: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+  show-actuator: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

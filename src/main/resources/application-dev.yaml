@@ -1,0 +1,24 @@
+spring:
+  docker:
+    compose:
+      enabled: true
+      file: docker-compose/docker-compose.yml
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/files
+    username: root
+    password: helios
+    driver-class-name: org.postgresql.Driver
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: api-file-share
+    password: api-file-share
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    root: INFO

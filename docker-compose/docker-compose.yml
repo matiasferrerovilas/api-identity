@@ -1,0 +1,44 @@
+name: api-file-share
+
+services:
+
+  postgres:
+    image: postgres:latest
+    container_name: api-file-share-postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: helios
+      POSTGRES_DB: files
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - api-file-share
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: api-file-share-rabbit
+    environment:
+      RABBITMQ_DEFAULT_USER: api-file-share
+      RABBITMQ_DEFAULT_PASS: api-file-share
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - api-file-share
+
+  redis:
+    image: valkey/valkey:latest
+    container_name: api-file-share-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - api-file-share
+
+networks:
+  api-file-share:
+    driver: bridge
+
+volumes:
+  postgres_data:
