@@ -3,13 +3,13 @@ buildscript {
 		classpath("org.liquibase:liquibase-core:5.0.1")
 	}
 }
-
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
-	id 'org.graalvm.buildtools.native' version '1.1.1'
 	id 'org.liquibase.gradle' version '3.1.0'
+	id 'org.graalvm.buildtools.native' version '1.1.1'
+	id 'org.hibernate.orm' version '7.4.1.Final'
 	id 'checkstyle'
 	id 'jacoco'
 	id 'groovy'
@@ -19,8 +19,10 @@ group = 'com.api.identity'
 version = '1.0.0'
 
 java {
+	sourceCompatibility = '25'
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(25)
+		vendor = JvmVendorSpec.GRAAL_VM
 	}
 }
 
@@ -68,10 +70,6 @@ dependencies {
 	//Logs
 	implementation 'org.apache.commons:commons-text:1.14.0'
 
-	// Cache
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-	testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
-
 	// Database
 	runtimeOnly 'com.mysql:mysql-connector-j'
 
@@ -113,16 +111,9 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 
-	// Configuración de encoding
 	systemProperty 'file.encoding', 'UTF-8'
-
-	// Performance
-	// Los tests de integración levantan un contenedor MySQL + contexto Spring completo
-	// por fork (el @Shared static container no se comparte entre JVMs distintas).
-	// Con cores/2 en máquinas de muchos cores esto multiplica contenedores y satura RAM/disco.
 	maxParallelForks = Math.min(2, Runtime.runtime.availableProcessors().intdiv(2) ?: 1)
 
-	// Logging mejorado
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 		exceptionFormat 'full'
@@ -148,13 +139,28 @@ springBoot {
 	buildInfo()
 }
 
-
 jar {
 	enabled = false
 }
 
+hibernate {
+	enhancement {
+	}
+}
 
-// Configuración de compilación
+graalvmNative {
+	binaries {
+		main {
+			imageName = 'application'
+			javaLauncher = javaToolchains.launcherFor {
+				languageVersion = JavaLanguageVersion.of(25)
+				vendor = JvmVendorSpec.GRAAL_VM
+			}
+			classpath.from(sourceSets.main.output)
+		}
+	}
+}
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.compilerArgs += [
@@ -168,6 +174,10 @@ test {
 	finalizedBy jacocoTestReport
 }
 
+tasks.matching { it.name in ['compileAotJava', 'compileAotTestJava'] }.configureEach {
+	options.compilerArgs -= ['-Xlint:unchecked', '-Xlint:deprecation']
+	options.compilerArgs += ['-Xlint:-unchecked', '-Xlint:-deprecation']
+}
 
 jacocoTestReport {
 	dependsOn test

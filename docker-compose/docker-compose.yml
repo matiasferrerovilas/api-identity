@@ -1,44 +1,36 @@
-name: api-file-share
+name: api-identity
 
 services:
 
-  postgres:
-    image: postgres:latest
-    container_name: api-file-share-postgres
+  mysql:
+    image: mysql:latest
+    container_name: api-identity-mysql
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: helios
-      POSTGRES_DB: files
+      MYSQL_ROOT_PASSWORD: helios
+      MYSQL_DATABASE: identity
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - mysql_data:/var/lib/mysql
     networks:
-      - api-file-share
+      - api-identity
 
   rabbitmq:
     image: rabbitmq:management
-    container_name: api-file-share-rabbit
+    container_name: api-identity-rabbit
     environment:
-      RABBITMQ_DEFAULT_USER: api-file-share
-      RABBITMQ_DEFAULT_PASS: api-file-share
+      RABBITMQ_DEFAULT_USER: api-identity
+      RABBITMQ_DEFAULT_PASS: api-identity
     ports:
       - "5672:5672"
       - "15672:15672"
     networks:
-      - api-file-share
+      - api-identity
 
-  redis:
-    image: valkey/valkey:latest
-    container_name: api-file-share-redis
-    ports:
-      - "6379:6379"
-    networks:
-      - api-file-share
 
 networks:
-  api-file-share:
+  api-identity:
     driver: bridge
 
 volumes:
-  postgres_data:
+  mysql_data:

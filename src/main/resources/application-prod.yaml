@@ -3,12 +3,12 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
   rabbitmq:
     host: ${RABBIT_URL}
     port: 5672
-    username: api-file-share
-    password: api-file-share
+    username: api-identity
+    password: api-identity
   data:
     redis:
       host: ${REDIS_URL}

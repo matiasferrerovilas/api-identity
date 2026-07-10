@@ -5,15 +5,15 @@ spring:
       file: docker-compose/docker-compose.yml
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/files
+    url: jdbc:mysql://localhost:3306/identity
     username: root
     password: helios
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
   rabbitmq:
     host: localhost
     port: 5672
-    username: api-file-share
-    password: api-file-share
+    username: api-identity
+    password: api-identity
   data:
     redis:
       host: localhost

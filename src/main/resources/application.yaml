@@ -4,10 +4,6 @@ server:
   http2:
     enabled: true
 
-app:
-  storage:
-    base-path: ${STORAGE_BASE_PATH:/mnt/storage}
-
 jwt:
   auth:
     converter:
@@ -45,7 +41,7 @@ spring:
           issuer-uri: ${KC_URL_REALM}
   liquibase:
     enabled: true
-    change-log: classpath:db/changelog/changelog.yaml
+    change-log: classpath:changelog/changelog.yaml
   main:
     banner-mode: off
 
