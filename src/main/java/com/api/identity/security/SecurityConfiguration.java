@@ -1,6 +1,6 @@
 package com.api.identity.security;
 
-import api.m2.movements.configuration.properties.JwtProperties;
+import com.api.identity.configuration.properties.JwtProperties;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,8 +40,7 @@ public class SecurityConfiguration {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-resources/**",
-                                "/webjars/**",
-                                "/ws/**"
+                                "/webjars/**"
                         ).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
@@ -57,7 +56,7 @@ public class SecurityConfiguration {
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
-                "https://movement.eva-core.com",
+                "https://identity.eva-core.com",
                 "http://localhost:5173",
                 "http://localhost:8081"
         ));
