@@ -1,5 +1,6 @@
 package com.api.identity.entities;
 
+import com.api.identity.enums.UserRole;
 import com.api.identity.enums.UserType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,4 +57,8 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_type", nullable = false, length = 50)
     private UserType userType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_role", nullable = false, length = 50)
+    private UserRole userRole;
 }

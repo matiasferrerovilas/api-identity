@@ -8,7 +8,8 @@ CREATE TABLE users (
     family_name    VARCHAR(255),
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    user_type      VARCHAR(50) NOT NULL
+    user_type      VARCHAR(50) NOT NULL,
+    user_role      VARCHAR(50) NOT NULL
 );
 
 CREATE TABLE workspaces (
