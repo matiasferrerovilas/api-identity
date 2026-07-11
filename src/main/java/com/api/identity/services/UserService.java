@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,13 +38,11 @@ public class UserService {
     }
 
     @Transactional
-    public void markTourAsSeen() {
-        Authentication authentication = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+    public void markTourAsSeen(String api) {
+        String email = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
                 .filter(Authentication::isAuthenticated)
+                .map(Authentication::getName)
                 .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
-
-        String email = authentication.getName();
-        String api = extractApi(authentication);
 
         int updated = onboardingDoneRepository.markTourAsSeen(email, api);
         if (updated == 0) {
@@ -64,14 +61,5 @@ public class UserService {
         if (updated == 0) {
             throw new EntityNotFoundException("Usuario inexistente");
         }
-    }
-    private String extractApi(Authentication authentication) {
-        if (!(authentication instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
-            throw new PermissionDeniedException("El token de autenticación no es un JWT válido");
-        }
-
-        return Optional.ofNullable(jwtAuthenticationToken.getToken().getAudience())
-                .flatMap(audience -> audience.stream().findFirst())
-                .orElseThrow(() -> new PermissionDeniedException("El token no contiene el claim 'aud'"));
     }
 }
