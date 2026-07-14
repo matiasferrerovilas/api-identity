@@ -19,8 +19,8 @@ services:
     image: rabbitmq:management
     container_name: api-identity-rabbit
     environment:
-      RABBITMQ_DEFAULT_USER: api-identity
-      RABBITMQ_DEFAULT_PASS: api-identity
+      RABBITMQ_DEFAULT_USER: localhost
+      RABBITMQ_DEFAULT_PASS: localhost
     ports:
       - "5672:5672"
       - "15672:15672"

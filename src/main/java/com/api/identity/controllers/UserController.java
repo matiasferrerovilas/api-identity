@@ -1,7 +1,10 @@
 package com.api.identity.controllers;
 
 import com.api.identity.records.UserMe;
+import com.api.identity.records.UserToAdd;
 import com.api.identity.records.UserTypeUpdateRequest;
+import com.api.identity.services.OnboardingService;
+import com.api.identity.services.UserAddService;
 import com.api.identity.services.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -26,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final UserAddService userAddService;
+    private final OnboardingService onboardingService;
 
     @Operation(
             summary = "Obtener datos del usuario autenticado",
@@ -43,8 +49,32 @@ public class UserController {
             }
     )
     @GetMapping("/me")
-    public UserMe getMe() {
-        return userService.getMe();
+    public UserMe getMe(@RequestHeader("X-Source-Service") String sourceService) {
+        return userService.getMe(sourceService);
+    }
+
+    @Operation(
+            summary = "Crear usuario",
+            description = "Crea al usuario con los datos recibidos y le asegura el registro de onboarding "
+                    + "para la API que llama. Si ya existe un usuario con ese email, falla con conflicto.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Datos del usuario creado",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = UserMe.class)
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "409",
+                            description = "Ya existe un usuario con ese email"
+                    )
+            }
+    )
+    @PostMapping
+    public UserMe createLogInUser(@RequestBody UserToAdd request, @RequestHeader("X-Source-Service") String sourceService) {
+        return userAddService.createLogInUser(request, sourceService);
     }
 
     @Operation(
@@ -60,7 +90,7 @@ public class UserController {
     )
     @PutMapping("/tour")
     public ResponseEntity<Void> markTourAsSeen(@RequestHeader("X-Source-Service") String sourceService) {
-        userService.markTourAsSeen(sourceService);
+        onboardingService.markTourAsSeen(sourceService);
         return ResponseEntity.noContent().build();
     }
 

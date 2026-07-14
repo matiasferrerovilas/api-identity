@@ -1,5 +1,10 @@
 package com.api.identity.records;
 
+import lombok.Builder;
+
+import java.util.List;
+
+@Builder(toBuilder = true)
 public record UserMe(
         Long id,
         String email,
@@ -8,9 +13,10 @@ public record UserMe(
         String userType,
         Metadata metadata
 ) {
+    @Builder
     public record Metadata(
             boolean isFirstLogin,
             boolean hasSeenTour,
-            String userRole
+            List<String> userRole
     ) { }
 }

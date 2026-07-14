@@ -1,9 +1,4 @@
 spring:
-  docker:
-    compose:
-      enabled: true
-      file: docker-compose/docker-compose.yml
-
   datasource:
     url: jdbc:mysql://localhost:3306/identity
     username: root
@@ -12,8 +7,8 @@ spring:
   rabbitmq:
     host: localhost
     port: 5672
-    username: api-identity
-    password: api-identity
+    username: localhost
+    password: localhost
   data:
     redis:
       host: localhost

@@ -6,8 +6,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface OnboardingDoneRepository extends JpaRepository<OnboardingDone, Long> {
+    Optional<OnboardingDone> findByUser_EmailAndApi(String email, String api);
+
     @Modifying
     @Query(value = """
      UPDATE OnboardingDone o
