@@ -1,8 +1,9 @@
-package com.api.identity.services;
+package com.api.identity.services.onboarding;
 
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.repositories.OnboardingDoneRepository;
+import com.api.identity.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -17,6 +18,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class OnboardingService {
     private final OnboardingDoneRepository onboardingDoneRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public void markTourAsSeen(String api) {
@@ -29,5 +31,13 @@ public class OnboardingService {
         if (updated == 0) {
             throw new EntityNotFoundException("No existe onboarding para el usuario '%s' y la API '%s'".formatted(email, api));
         }
+    }
+
+    @Transactional
+    public void changeUserFirstLoginStatus(Long userId) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Usuario inexistente"));
+
+        onboardingDoneRepository.markFirstLoginAsDone(userId);
     }
 }

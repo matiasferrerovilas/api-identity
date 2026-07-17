@@ -1,11 +1,10 @@
 package com.api.identity.controllers;
 
-import com.api.identity.records.UserMe;
-import com.api.identity.records.UserToAdd;
-import com.api.identity.records.UserTypeUpdateRequest;
-import com.api.identity.services.OnboardingService;
-import com.api.identity.services.UserAddService;
-import com.api.identity.services.UserService;
+import com.api.identity.records.user.UserMe;
+import com.api.identity.records.user.UserToAdd;
+import com.api.identity.records.user.UserTypeUpdateRequest;
+import com.api.identity.services.user.UserAddService;
+import com.api.identity.services.user.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -18,11 +17,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/v1/users")
@@ -31,7 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
     private final UserService userService;
     private final UserAddService userAddService;
-    private final OnboardingService onboardingService;
 
     @Operation(
             summary = "Obtener datos del usuario autenticado",
@@ -51,6 +51,26 @@ public class UserController {
     @GetMapping("/me")
     public UserMe getMe(@RequestHeader("X-Source-Service") String sourceService) {
         return userService.getMe(sourceService);
+    }
+
+    @Operation(
+            summary = "Obtener usuarios por ID",
+            description = "Retorna los datos básicos de los usuarios cuyos IDs fueron indicados. "
+                    + "Usado por otros servicios para resolver referencias a usuarios.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Usuarios encontrados",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = UserMe.class)
+                            )
+                    )
+            }
+    )
+    @GetMapping
+    public List<UserMe> getUsersByIds(@RequestParam List<Long> ids) {
+        return userService.getUsersByIds(ids);
     }
 
     @Operation(
@@ -75,23 +95,6 @@ public class UserController {
     @PostMapping
     public UserMe createLogInUser(@RequestBody UserToAdd request, @RequestHeader("X-Source-Service") String sourceService) {
         return userAddService.createLogInUser(request, sourceService);
-    }
-
-    @Operation(
-            summary = "Marcar tour como visto",
-            description = "Marca que el usuario autenticado ya vio el tour de la aplicación. "
-                    + "Esto evita que se muestre el tour en futuros ingresos.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "204",
-                            description = "Tour marcado como visto"
-                    )
-            }
-    )
-    @PutMapping("/tour")
-    public ResponseEntity<Void> markTourAsSeen(@RequestHeader("X-Source-Service") String sourceService) {
-        onboardingService.markTourAsSeen(sourceService);
-        return ResponseEntity.noContent().build();
     }
 
     @Operation(

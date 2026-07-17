@@ -1,4 +1,4 @@
-package com.api.identity.records;
+package com.api.identity.records.user;
 
 import lombok.Builder;
 

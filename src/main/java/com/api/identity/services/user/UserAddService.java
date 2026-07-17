@@ -1,4 +1,4 @@
-package com.api.identity.services;
+package com.api.identity.services.user;
 
 import com.api.identity.entities.OnboardingDone;
 import com.api.identity.entities.User;
@@ -6,8 +6,8 @@ import com.api.identity.enums.UserRole;
 import com.api.identity.exceptions.EntityAlreadyExistsException;
 import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.mappers.UserMapper;
-import com.api.identity.records.UserMe;
-import com.api.identity.records.UserToAdd;
+import com.api.identity.records.user.UserMe;
+import com.api.identity.records.user.UserToAdd;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;

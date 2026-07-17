@@ -1,7 +1,7 @@
 package com.api.identity.mappers;
 
 import com.api.identity.entities.User;
-import com.api.identity.records.UserMe;
+import com.api.identity.records.user.UserMe;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -13,6 +13,10 @@ public interface UserMapper {
 
     @Mapping(target = "metadata", expression = "java(toMetadata(isFirstLogin, hasSeenTour, roles))")
     UserMe toUserMe(User user, boolean isFirstLogin, boolean hasSeenTour, List<String> roles);
+
+    UserMe toUserMe(User user);
+
+    List<UserMe> toUserMe(List<User> users);
 
     default UserMe.Metadata toMetadata(boolean isFirstLogin, boolean hasSeenTour, List<String> roles) {
         return UserMe.Metadata.builder()

@@ -8,7 +8,7 @@ import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.records.workspaces.AddWorkspaceRecord
 import com.api.identity.repositories.UserRepository
 import com.api.identity.repositories.WorkspaceRepository
-import com.api.identity.services.WorkspaceAddService
+import com.api.identity.services.workspace.WorkspaceAddService
 import spock.lang.Specification
 
 class WorkspaceAddServiceTest extends Specification {

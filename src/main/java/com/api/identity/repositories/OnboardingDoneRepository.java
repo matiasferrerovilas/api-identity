@@ -20,4 +20,12 @@ public interface OnboardingDoneRepository extends JpaRepository<OnboardingDone, 
         AND o.api = :api
 """)
     int markTourAsSeen(String email, String api);
+
+    @Modifying
+    @Query(value = """
+     UPDATE OnboardingDone o
+        SET o.isFirstLogin = false
+      WHERE o.user.id = :userId
+""")
+    int markFirstLoginAsDone(Long userId);
 }
