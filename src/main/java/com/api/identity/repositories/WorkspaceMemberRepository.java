@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, Long> {
@@ -21,4 +22,8 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
     List<WorkspaceMember> findByWorkspaceOwnerOrMember(@Param("userId") Long userId);
 
     boolean existsByWorkspace_IdAndUser_Id(Long workspaceId, Long userId);
+
+    Optional<WorkspaceMember> findByWorkspace_Id(Long workspaceId);
+
+    void deleteByWorkspace_Id(Long workspaceId);
 }

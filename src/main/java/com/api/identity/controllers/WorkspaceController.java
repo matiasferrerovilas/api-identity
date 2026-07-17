@@ -5,8 +5,10 @@ import com.api.identity.records.workspaces.WorkspaceAdded;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
+import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
 import com.api.identity.services.invitations.WorkspaceInvitationService;
 import com.api.identity.services.workspace.WorkspaceAddService;
+import com.api.identity.services.workspace.WorkspaceMembershipService;
 import com.api.identity.services.workspace.WorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -17,6 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,6 +40,7 @@ public class WorkspaceController {
     private final WorkspaceAddService workspaceAddService;
     private final WorkspaceService workspaceService;
     private final WorkspaceInvitationService workspaceInvitationService;
+    private final WorkspaceMembershipService workspaceMembershipService;
 
     @Operation(
             summary = "Crear workspaces para un usuario",
@@ -106,7 +110,7 @@ public class WorkspaceController {
     @GetMapping("/{workspaceId}/members/{userId}")
     @ResponseStatus(HttpStatus.OK)
     public void verifyMembership(@PathVariable Long workspaceId, @PathVariable Long userId) {
-        workspaceService.verifyMembership(workspaceId, userId);
+        workspaceMembershipService.verifyMembership(workspaceId, userId);
     }
 
     @Operation(
@@ -151,5 +155,47 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.OK)
     public WorkspaceDTO getWorkspaceById(@PathVariable Long workspaceId) {
         return workspaceService.getWorkspaceById(workspaceId);
+    }
+
+    @Operation(
+            summary = "Crear workspaces para un usuario",
+            description = "Crea en bloque los workspaces indicados para el usuario, registrándolo como OWNER de cada uno. "
+                    + "Usado por otros servicios durante el onboarding.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "201",
+                            description = "Workspaces creados",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = WorkspaceAdded.class)
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "400",
+                            description = "Lista vacía, nombre en blanco o nombre repetido"
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "Usuario inexistente"
+                    )
+            }
+    )
+    @DeleteMapping("/{workspaceId}")
+    @ResponseStatus(HttpStatus.OK)
+    public void deleteWorkspace(@PathVariable Long workspaceId) {
+        workspaceService.deleteWorkspace(workspaceId);
+    }
+
+    @Operation(
+            summary = "Listar invitaciones recibidas",
+            description = "Devuelve todas las invitaciones pendientes del usuario autenticado.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Invitaciones obtenidas correctamente")
+            }
+    )
+    @PostMapping("/{workspaceId}/invitations")
+    @ResponseStatus(HttpStatus.OK)
+    public void sendInvitation(@PathVariable Long workspaceId, @Valid @RequestBody WorkspaceSendInvitationDTO body) {
+        workspaceInvitationService.sendInvitation(workspaceId, body);
     }
 }

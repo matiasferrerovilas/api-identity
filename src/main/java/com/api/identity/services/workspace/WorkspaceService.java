@@ -5,9 +5,11 @@ import com.api.identity.mappers.WorkspaceMapper;
 import com.api.identity.mappers.WorkspaceMemberMapper;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
+import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
 import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.repositories.WorkspaceRepository;
 import com.api.identity.services.user.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class WorkspaceService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final WorkspaceMemberMapper workspaceMemberMapper;
     private final UserService userService;
+    private final WorkspaceMembershipService workspaceMembershipService;
 
     @Transactional(readOnly = true)
     public List<WorkspaceMemberDTO> getWorkspaceMembers() {
@@ -34,11 +37,12 @@ public class WorkspaceService {
                 workspaceMemberRepository.findByWorkspaceOwnerOrMember(user.getId()));
     }
 
-    @Transactional(readOnly = true)
-    public void verifyMembership(Long workspaceId, Long userId) {
-        if (!workspaceMemberRepository.existsByWorkspace_IdAndUser_Id(workspaceId, userId)) {
-            throw new EntityNotFoundException("El usuario no pertenece al workspace indicado");
-        }
+    @Transactional
+    public void deleteWorkspace(Long workspaceId) {
+        var owner = userService.getAuthenticatedUser();
+        workspaceMembershipService.verifyMembership(workspaceId, owner.getId());
+        var membership = workspaceMemberRepository.findByWorkspace_Id(workspaceId);
+        log.info("Deleting workspace {}", workspaceId);
     }
 
     @Transactional(readOnly = true)
@@ -47,4 +51,6 @@ public class WorkspaceService {
                 workspaceRepository.findById(workspaceId)
                         .orElseThrow(() -> new EntityNotFoundException("Workspace no encontrado")));
     }
+
+
 }

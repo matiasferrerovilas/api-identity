@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WorkspaceAddService {
 
-    private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final UserService userService;
 
@@ -51,6 +50,8 @@ public class WorkspaceAddService {
                 .map(workspace -> new WorkspaceAdded(workspace.getId(), workspace.getName()))
                 .toList();
     }
+
+
 
     private String sanitizeName(String description) {
         if (description == null || description.isBlank()) {
@@ -88,4 +89,6 @@ public class WorkspaceAddService {
 
         return workspace;
     }
+
+
 }
