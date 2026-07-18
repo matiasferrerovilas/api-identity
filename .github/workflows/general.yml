@@ -1,0 +1,146 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: ["main", "develop"]
+
+env:
+  IMAGE_NAME: "mferrerovilas/api-identity"
+
+jobs:
+
+  test:
+    name: Test & Checkstyle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up GraalVM 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: "25"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Run Tests & Checkstyle
+        run: ./gradlew test checkstyleMain checkstyleTest --no-daemon --continue
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: build/reports/tests/
+          retention-days: 7
+
+  build:
+    name: Compute Version
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up GraalVM 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: "25"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Gradle
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Compute Version
+        id: version
+        run: |
+          set -euo pipefail
+          BUILD_VERSION=$(./gradlew -q printVersion --no-daemon | head -n1 | tr -d '\r\n')
+          if [ -z "$BUILD_VERSION" ]; then
+            echo "ERROR: Version is empty"
+            exit 1
+          fi
+          if [[ "${GITHUB_REF_NAME}" == "develop" ]] || [[ "${GITHUB_REF_NAME}" == hotfix/* ]]; then
+            PHASE="-SNAPSHOT"
+          else
+            PHASE=""
+          fi
+          FINAL_VERSION="${BUILD_VERSION}${PHASE}"
+          echo "version=${FINAL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "phase=${PHASE}" >> "$GITHUB_OUTPUT"
+          echo "${FINAL_VERSION}" > build.version
+          echo "${PHASE}" > build.phase
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-artifacts
+          path: |
+            build.version
+            build.phase
+          retention-days: 1
+
+  deploy:
+    name: Deploy Docker Image
+    needs: [test, build]
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+
+      - name: Get Version
+        id: version
+        run: |
+          echo "version=$(cat build.version)" >> "$GITHUB_OUTPUT"
+          echo "phase=$(cat build.phase)"     >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          platforms: linux/arm64
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=arm64-native-build
+          cache-to: type=gha,mode=max,scope=arm64-native-build
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ github.ref_name == 'main' && format('{0}:latest', env.IMAGE_NAME) || '' }}

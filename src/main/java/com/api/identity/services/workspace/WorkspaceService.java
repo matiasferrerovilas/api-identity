@@ -50,25 +50,25 @@ public class WorkspaceService {
     @Transactional
     public void deleteWorkspace(Long workspaceId) {
         var owner = userService.getAuthenticatedUser();
-        workspaceMembershipService.verifyMembership(workspaceId, owner.getId());
         var membership = workspaceMemberRepository.findByWorkspace_IdAndUser_Id(workspaceId, owner.getId())
-                        .orElseThrow(() -> new EntityNotFoundException("No existe el workspace con id " + workspaceId));
-        log.info("Deleting workspace {}", workspaceId);
+                        .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"));
 
-        if(membership.getRole().equals(WorkspaceRole.OWNER)){
-            var workspaceToBeRemoved = this.getWorkspaceDTOById(workspaceId);
-            if(workspaceToBeRemoved.metadata().members().size() > 1){
-                var anotherUserEmail = workspaceToBeRemoved.metadata().members().getLast();
-                var anotherUserId = userService.getUserByEmail(List.of(anotherUserEmail))
-                        .getFirst()
-                        .getId();
-                var anotherMembership = workspaceMemberRepository.findByWorkspace_IdAndUser_Id(workspaceId, anotherUserId)
-                        .orElseThrow(() -> new EntityNotFoundException("No existe el workspace con id " + workspaceId));
-                anotherMembership.setRole(WorkspaceRole.OWNER);
-                workspaceMemberRepository.save(anotherMembership);
-                workspaceMemberRepository.delete(membership);
-            }
+        if (membership.getRole() == WorkspaceRole.OWNER) {
+            workspaceMemberRepository.findByWorkspace_Id(workspaceId).stream()
+                    .filter(m -> !m.getUser().getId().equals(owner.getId()))
+                    .findFirst()
+                    .ifPresent(newOwner -> {
+                        newOwner.setRole(WorkspaceRole.OWNER);
+                        workspaceMemberRepository.save(newOwner);
+
+                        var workspace = findWorkspaceById(workspaceId);
+                        workspace.setOwner(newOwner.getUser());
+                        workspaceRepository.save(workspace);
+                    });
         }
+
+        workspaceMemberRepository.delete(membership);
+        log.info("Usuario {} salió del workspace {}", owner.getId(), workspaceId);
     }
 
     @Transactional(readOnly = true)
