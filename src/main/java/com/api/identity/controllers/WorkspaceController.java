@@ -3,10 +3,7 @@ package com.api.identity.controllers;
 import com.api.identity.records.workspaces.AddWorkspaceRecord;
 import com.api.identity.records.workspaces.WorkspaceAdded;
 import com.api.identity.records.workspaces.WorkspaceDTO;
-import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
-import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
-import com.api.identity.services.invitations.WorkspaceInvitationService;
 import com.api.identity.services.workspace.WorkspaceAddService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
 import com.api.identity.services.workspace.WorkspaceService;
@@ -39,7 +36,6 @@ public class WorkspaceController {
 
     private final WorkspaceAddService workspaceAddService;
     private final WorkspaceService workspaceService;
-    private final WorkspaceInvitationService workspaceInvitationService;
     private final WorkspaceMembershipService workspaceMembershipService;
 
     @Operation(
@@ -114,26 +110,6 @@ public class WorkspaceController {
     }
 
     @Operation(
-            summary = "Obtener invitaciones pendientes",
-            description = "Devuelve las invitaciones a workspaces pendientes de aceptación para el usuario autenticado.",
-            responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Invitaciones obtenidas",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = WorkspaceInvitationDTO.class)
-                            )
-                    )
-            }
-    )
-    @GetMapping("/invitations")
-    @ResponseStatus(HttpStatus.OK)
-    public List<WorkspaceInvitationDTO> getPendingInvitations() {
-        return workspaceInvitationService.getPendingInvitations();
-    }
-
-    @Operation(
             summary = "Obtener workspace por id",
             description = "Devuelve los datos del workspace indicado.",
             responses = {
@@ -154,29 +130,20 @@ public class WorkspaceController {
     @GetMapping("/{workspaceId}")
     @ResponseStatus(HttpStatus.OK)
     public WorkspaceDTO getWorkspaceById(@PathVariable Long workspaceId) {
-        return workspaceService.getWorkspaceById(workspaceId);
+        return workspaceService.getWorkspaceDTOById(workspaceId);
     }
 
     @Operation(
-            summary = "Crear workspaces para un usuario",
-            description = "Crea en bloque los workspaces indicados para el usuario, registrándolo como OWNER de cada uno. "
-                    + "Usado por otros servicios durante el onboarding.",
+            summary = "Eliminar un workspace",
+            description = "Elimina el workspace indicado. Requiere que el usuario autenticado pertenezca a dicho workspace.",
             responses = {
                     @ApiResponse(
-                            responseCode = "201",
-                            description = "Workspaces creados",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = WorkspaceAdded.class)
-                            )
-                    ),
-                    @ApiResponse(
-                            responseCode = "400",
-                            description = "Lista vacía, nombre en blanco o nombre repetido"
+                            responseCode = "200",
+                            description = "Workspace eliminado"
                     ),
                     @ApiResponse(
                             responseCode = "404",
-                            description = "Usuario inexistente"
+                            description = "El usuario no pertenece al workspace indicado"
                     )
             }
     )
@@ -186,16 +153,4 @@ public class WorkspaceController {
         workspaceService.deleteWorkspace(workspaceId);
     }
 
-    @Operation(
-            summary = "Listar invitaciones recibidas",
-            description = "Devuelve todas las invitaciones pendientes del usuario autenticado.",
-            responses = {
-                    @ApiResponse(responseCode = "200", description = "Invitaciones obtenidas correctamente")
-            }
-    )
-    @PostMapping("/{workspaceId}/invitations")
-    @ResponseStatus(HttpStatus.OK)
-    public void sendInvitation(@PathVariable Long workspaceId, @Valid @RequestBody WorkspaceSendInvitationDTO body) {
-        workspaceInvitationService.sendInvitation(workspaceId, body);
-    }
 }

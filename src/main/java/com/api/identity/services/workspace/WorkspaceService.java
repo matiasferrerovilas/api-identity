@@ -1,15 +1,14 @@
 package com.api.identity.services.workspace;
 
+import com.api.identity.entities.Workspace;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.mappers.WorkspaceMapper;
 import com.api.identity.mappers.WorkspaceMemberMapper;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
-import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
 import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.repositories.WorkspaceRepository;
 import com.api.identity.services.user.UserService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,10 +45,15 @@ public class WorkspaceService {
     }
 
     @Transactional(readOnly = true)
-    public WorkspaceDTO getWorkspaceById(Long workspaceId) {
+    public WorkspaceDTO getWorkspaceDTOById(Long workspaceId) {
         return workspaceMapper.toDTO(
                 workspaceRepository.findById(workspaceId)
                         .orElseThrow(() -> new EntityNotFoundException("Workspace no encontrado")));
+    }
+    @Transactional(readOnly = true)
+    public Workspace findWorkspaceById(Long workspaceId) {
+        return workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace no encontrado"));
     }
 
 

@@ -97,4 +97,8 @@ public class UserService {
             throw new EntityNotFoundException("Usuario inexistente");
         }
     }
+
+    public List<User> getUserByEmail(List<String> emails) {
+        return userRepository.findByEmail(emails);
+    }
 }
