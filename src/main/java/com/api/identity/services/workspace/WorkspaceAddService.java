@@ -7,7 +7,6 @@ import com.api.identity.enums.WorkspaceRole;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.records.workspaces.AddWorkspaceRecord;
 import com.api.identity.records.workspaces.WorkspaceAdded;
-import com.api.identity.repositories.UserRepository;
 import com.api.identity.repositories.WorkspaceRepository;
 import com.api.identity.services.user.UserService;
 import lombok.RequiredArgsConstructor;

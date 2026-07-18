@@ -24,13 +24,13 @@ public class WorkspaceMembershipService {
 
     @Transactional(readOnly = true)
     public void verifyMembership(Long workspaceId, Long userId) {
-        if (!workspaceMemberRepository.existsByWorkspace_IdAndUser_Id(workspaceId, userId)) {
+        if (!workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspaceId, userId)) {
             throw new EntityNotFoundException("El usuario no pertenece al workspace indicado");
         }
     }
 
     public void addMembership(Long workspaceId, User user) {
-        if (workspaceMemberRepository.existsByWorkspace_IdAndUser_Id(workspaceId, user.getId())) {
+        if (workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspaceId, user.getId())) {
             throw new EntityAlreadyExistsException("El usuario ya pertenece al workspace indicado");
         }
         var workspace = workspaceRepository.findById(workspaceId).orElseThrow(() -> new EntityNotFoundException("El workspace no existe"));
@@ -40,6 +40,6 @@ public class WorkspaceMembershipService {
                         .user(user)
                         .role(WorkspaceRole.COLLABORATOR)
                 .build());
-        log.debug("Se agrego el usuario {} al workspace {}",user.getEmail(), workspaceId);
+        log.debug("Se agrego el usuario {} al workspace {}", user.getEmail(), workspaceId);
     }
 }

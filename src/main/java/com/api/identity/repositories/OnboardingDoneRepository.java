@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 public interface OnboardingDoneRepository extends JpaRepository<OnboardingDone, Long> {
-    Optional<OnboardingDone> findByUser_EmailAndApi(String email, String api);
+    Optional<OnboardingDone> findByUserEmailAndApi(String email, String api);
 
     @Modifying
     @Query(value = """

@@ -37,7 +37,7 @@ public class WorkspaceInvitationService {
         var user = userService.getAuthenticatedUser();
 
         return workspaceInvitationMapper.toDTO(
-                workspaceInvitationRepository.findByInvitedUser_IdAndStatus(user.getId(), InvitationStatus.PENDING));
+                workspaceInvitationRepository.findByInvitedUserIdAndStatus(user.getId(), InvitationStatus.PENDING));
     }
 
     public void sendInvitation(Long workspaceId, @Valid WorkspaceSendInvitationDTO body) {
@@ -48,9 +48,10 @@ public class WorkspaceInvitationService {
 
         userService.getUserByEmail(body.emails())
                 .forEach(userInvited -> {
-                    var pendingInvitations = workspaceInvitationRepository.findByWorkspace_IdAndStatusAndInvitedUser_Id(workspaceId, InvitationStatus.PENDING, userInvited.getId());
+                    var pendingInvitations = workspaceInvitationRepository.findByWorkspaceIdAndStatusAndInvitedUserId(
+                            workspaceId, InvitationStatus.PENDING, userInvited.getId());
 
-                    if(pendingInvitations.isPresent()){
+                    if (pendingInvitations.isPresent()) {
                         log.error("Ya existen invitaciones pendientes a este workspace para este usuario");
                         return;
                     }
@@ -63,7 +64,6 @@ public class WorkspaceInvitationService {
                             .status(InvitationStatus.PENDING)
                             .workspace(workspaceToInvite)
                             .build());
-                    ;
                     applicationEventPublisher.publishEvent(workspaceInvitationMapper.toDTO(workspaceInvitation));
                 });
 
@@ -75,17 +75,17 @@ public class WorkspaceInvitationService {
         var invitation = workspaceInvitationRepository.findById(invitationDTO.id())
                 .orElseThrow(EntityNotFoundException::new);
 
-        if(!InvitationStatus.PENDING.equals(invitation.getStatus())){
+        if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
             log.error("La Invitación ya fue rechazada/aceptada");
             return;
         }
-        if(!invitation.getInvitedUser().getId().equals(user.getId())){
+        if (!invitation.getInvitedUser().getId().equals(user.getId())) {
             log.error("El usuario no tiene Invitación para el solicitud");
             return;
         }
         invitation.setStatus(invitationDTO.status() ? InvitationStatus.ACCEPTED : InvitationStatus.REJECTED);
         workspaceInvitationRepository.save(invitation);
-        if(invitationDTO.status()){
+        if (invitationDTO.status()) {
             workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
         }
         log.debug("Invitación {} actualizada correctamente a {}", invitationDTO.id(), invitation.getStatus());

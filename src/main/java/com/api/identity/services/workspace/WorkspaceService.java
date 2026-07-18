@@ -43,18 +43,18 @@ public class WorkspaceService {
         workspaceMembershipService.verifyMembership(workspaceId, user.getId());
 
         return workspaceMemberMapper.toDTO(
-                        workspaceMemberRepository.findByWorkspace_Id(workspaceId), user.getId())
+                        workspaceMemberRepository.findByWorkspaceId(workspaceId), user.getId())
                 .getFirst();
     }
 
     @Transactional
     public void deleteWorkspace(Long workspaceId) {
         var owner = userService.getAuthenticatedUser();
-        var membership = workspaceMemberRepository.findByWorkspace_IdAndUser_Id(workspaceId, owner.getId())
+        var membership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, owner.getId())
                         .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"));
 
         if (membership.getRole() == WorkspaceRole.OWNER) {
-            workspaceMemberRepository.findByWorkspace_Id(workspaceId).stream()
+            workspaceMemberRepository.findByWorkspaceId(workspaceId).stream()
                     .filter(m -> !m.getUser().getId().equals(owner.getId()))
                     .findFirst()
                     .ifPresent(newOwner -> {
