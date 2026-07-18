@@ -12,7 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -26,12 +25,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "workspace_invitations",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"workspace_id", "invited_user_id"})
-        }
-)
+@Table(name = "workspace_invitations")
 @Getter
 @Setter
 @AllArgsConstructor

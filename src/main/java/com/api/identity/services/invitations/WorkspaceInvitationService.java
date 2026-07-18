@@ -85,6 +85,9 @@ public class WorkspaceInvitationService {
         }
         invitation.setStatus(invitationDTO.status() ? InvitationStatus.ACCEPTED : InvitationStatus.REJECTED);
         workspaceInvitationRepository.save(invitation);
+        if(invitationDTO.status()){
+            workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
+        }
         log.debug("Invitación {} actualizada correctamente a {}", invitationDTO.id(), invitation.getStatus());
     }
 }
