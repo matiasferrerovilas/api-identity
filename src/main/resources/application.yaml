@@ -41,7 +41,7 @@ spring:
           issuer-uri: ${KC_URL_REALM}
   liquibase:
     enabled: true
-    change-log: classpath:changelog/changelog.yaml
+    change-log: classpath:db/changelog/changelog.yaml
   main:
     banner-mode: off
 
