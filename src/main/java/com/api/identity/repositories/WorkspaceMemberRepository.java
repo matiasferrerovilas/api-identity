@@ -14,7 +14,8 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
 
     @Query("""
             select distinct m from WorkspaceMember m
-            where m.workspace.id in (
+            where m.workspace.isActive = true
+              and m.workspace.id in (
                 select wm.workspace.id from WorkspaceMember wm where wm.user.id = :userId
             )
             """)
