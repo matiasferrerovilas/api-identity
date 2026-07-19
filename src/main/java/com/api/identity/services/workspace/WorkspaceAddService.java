@@ -65,7 +65,7 @@ public class WorkspaceAddService {
             throw new BusinessException("Hay workspaces con nombre repetido en la solicitud");
         }
 
-        var existing = workspaceRepository.findByOwnerIdAndNameIn(owner.getId(), names);
+        var existing = workspaceRepository.findByOwnerIdAndNameIn(owner.getId(), names, WorkspaceRole.OWNER);
         if (!existing.isEmpty()) {
             var existingNames = existing.stream()
                     .map(Workspace::getName)
@@ -77,7 +77,6 @@ public class WorkspaceAddService {
     private Workspace buildWorkspace(String name, User owner) {
         var workspace = Workspace.builder()
                 .name(name)
-                .owner(owner)
                 .build();
 
         workspace.getMembers().add(WorkspaceMember.builder()

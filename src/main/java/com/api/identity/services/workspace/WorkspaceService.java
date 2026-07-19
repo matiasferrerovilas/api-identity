@@ -60,10 +60,6 @@ public class WorkspaceService {
                     .ifPresent(newOwner -> {
                         newOwner.setRole(WorkspaceRole.OWNER);
                         workspaceMemberRepository.save(newOwner);
-
-                        var workspace = findWorkspaceById(workspaceId);
-                        workspace.setOwner(newOwner.getUser());
-                        workspaceRepository.save(workspace);
                     });
         }
 
