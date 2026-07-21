@@ -75,7 +75,7 @@ public class UserService {
 
         return userMapper.toUserMe(
                 optionalUser.get(),
-                onboarding.map(OnboardingDone::isFirstLogin).orElse(false),
+                onboarding.map(OnboardingDone::isFirstLogin).orElse(true),
                 onboarding.map(OnboardingDone::isHasSeenTour).orElse(false),
                 roles);
     }
