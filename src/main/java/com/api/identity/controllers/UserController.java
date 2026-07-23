@@ -75,12 +75,14 @@ public class UserController {
 
     @Operation(
             summary = "Crear usuario",
-            description = "Crea al usuario con los datos recibidos y le asegura el registro de onboarding "
-                    + "para la API que llama. Si ya existe un usuario con ese email, falla con conflicto.",
+            description = "Crea al usuario con los datos recibidos si no existe (por email) y le asegura el registro "
+                    + "de onboarding para la API que llama. Si el usuario ya existe (por haber hecho onboarding en "
+                    + "otra API) solo se crea el onboarding para la API actual, reutilizando el usuario existente. "
+                    + "Si ya existe un onboarding para ese usuario y esa API, falla con conflicto.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "Datos del usuario creado",
+                            description = "Datos del usuario creado o reutilizado",
                             content = @Content(
                                     mediaType = "application/json",
                                     schema = @Schema(implementation = UserMe.class)
@@ -88,7 +90,7 @@ public class UserController {
                     ),
                     @ApiResponse(
                             responseCode = "409",
-                            description = "Ya existe un usuario con ese email"
+                            description = "Ya existe un onboarding para ese usuario en esta API"
                     )
             }
     )

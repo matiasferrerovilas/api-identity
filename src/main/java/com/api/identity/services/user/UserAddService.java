@@ -54,17 +54,20 @@ public class UserAddService {
                 .filter(VALID_ROLES::contains)
                 .collect(Collectors.toCollection(HashSet::new));
 
-        if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new EntityAlreadyExistsException("Ya existe un usuario con el email '%s'".formatted(request.email()));
+        var existingUser = userRepository.findByEmail(request.email());
+
+        if (existingUser.isPresent() && onboardingDoneRepository.findByUserEmailAndApi(request.email(), api).isPresent()) {
+            throw new EntityAlreadyExistsException(
+                    "El usuario con email '%s' ya completó el onboarding para '%s'".formatted(request.email(), api));
         }
 
-        var user = userRepository.save(User.builder()
+        var user = existingUser.orElseGet(() -> userRepository.save(User.builder()
                 .email(request.email())
                 .givenName(request.givenName())
                 .familyName(request.familyName())
                 .userType(request.userType())
                 .userRoles(userRoles)
-                .build());
+                .build()));
 
         var onboarding = onboardingDoneRepository.save(OnboardingDone.builder()
                 .user(user)
