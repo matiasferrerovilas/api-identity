@@ -10,6 +10,7 @@ import com.api.identity.records.user.UserMe;
 import com.api.identity.records.user.UserToAdd;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.services.api.ApiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -36,6 +37,7 @@ public class UserAddService {
     private final UserRepository userRepository;
     private final OnboardingDoneRepository onboardingDoneRepository;
     private final UserMapper userMapper;
+    private final ApiService apiService;
 
     @Transactional
     public UserMe createLogInUser(UserToAdd request, String api) {
@@ -56,7 +58,7 @@ public class UserAddService {
 
         var existingUser = userRepository.findByEmail(request.email());
 
-        if (existingUser.isPresent() && onboardingDoneRepository.findByUserEmailAndApi(request.email(), api).isPresent()) {
+        if (existingUser.isPresent() && onboardingDoneRepository.findByUserEmailAndApiName(request.email(), api).isPresent()) {
             throw new EntityAlreadyExistsException(
                     "El usuario con email '%s' ya completó el onboarding para '%s'".formatted(request.email(), api));
         }
@@ -71,7 +73,7 @@ public class UserAddService {
 
         var onboarding = onboardingDoneRepository.save(OnboardingDone.builder()
                 .user(user)
-                .api(api)
+                .api(apiService.getOrCreate(api))
                 .isFirstLogin(false)
                 .hasSeenTour(false)
                 .build());

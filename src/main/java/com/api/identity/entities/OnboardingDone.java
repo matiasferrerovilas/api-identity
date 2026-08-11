@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
 @Table(
         name = "onboardings_done",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"user_id", "api"})
+                @UniqueConstraint(columnNames = {"user_id", "api_id"})
         }
 )
 @Getter
@@ -46,8 +46,9 @@ public class OnboardingDone {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
-    private String api;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "api_id", nullable = false)
+    private Api api;
 
     @Column(name = "is_first_login", nullable = false)
     @Builder.Default

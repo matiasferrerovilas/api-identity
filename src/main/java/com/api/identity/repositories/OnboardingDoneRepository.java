@@ -10,14 +10,14 @@ import java.util.Optional;
 
 @Repository
 public interface OnboardingDoneRepository extends JpaRepository<OnboardingDone, Long> {
-    Optional<OnboardingDone> findByUserEmailAndApi(String email, String api);
+    Optional<OnboardingDone> findByUserEmailAndApiName(String email, String api);
 
     @Modifying
     @Query(value = """
      UPDATE OnboardingDone o
         SET o.hasSeenTour = true
       WHERE o.user.email = :email
-        AND o.api = :api
+        AND o.api.name = :api
 """)
     int markTourAsSeen(String email, String api);
 

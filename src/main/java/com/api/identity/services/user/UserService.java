@@ -71,7 +71,7 @@ public class UserService {
                     .build();
         }
 
-        var onboarding = onboardingDoneRepository.findByUserEmailAndApi(email, api);
+        var onboarding = onboardingDoneRepository.findByUserEmailAndApiName(email, api);
 
         return userMapper.toUserMe(
                 optionalUser.get(),
