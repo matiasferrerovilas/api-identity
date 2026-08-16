@@ -3,6 +3,7 @@ package com.api.identity.controllers;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.records.user.UserToAdd;
 import com.api.identity.records.user.UserTypeUpdateRequest;
+import com.api.identity.services.api.SourceServiceResolver;
 import com.api.identity.services.user.UserAddService;
 import com.api.identity.services.user.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,11 +15,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +34,7 @@ import java.util.List;
 public class UserController {
     private final UserService userService;
     private final UserAddService userAddService;
+    private final SourceServiceResolver sourceServiceResolver;
 
     @Operation(
             summary = "Obtener datos del usuario autenticado",
@@ -49,8 +52,8 @@ public class UserController {
             }
     )
     @GetMapping("/me")
-    public UserMe getMe(@RequestHeader("X-Source-Service") String sourceService) {
-        return userService.getMe(sourceService);
+    public UserMe getMe(@AuthenticationPrincipal Jwt jwt) {
+        return userService.getMe(sourceServiceResolver.resolve(jwt));
     }
 
     @Operation(
@@ -95,8 +98,8 @@ public class UserController {
             }
     )
     @PostMapping
-    public UserMe createLogInUser(@RequestBody UserToAdd request, @RequestHeader("X-Source-Service") String sourceService) {
-        return userAddService.createLogInUser(request, sourceService);
+    public UserMe createLogInUser(@RequestBody UserToAdd request, @AuthenticationPrincipal Jwt jwt) {
+        return userAddService.createLogInUser(request, sourceServiceResolver.resolve(jwt));
     }
 
     @Operation(

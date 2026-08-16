@@ -5,6 +5,7 @@ import com.api.identity.entities.WorkspaceMember;
 import com.api.identity.enums.WorkspaceRole;
 import com.api.identity.exceptions.EntityAlreadyExistsException;
 import com.api.identity.exceptions.EntityNotFoundException;
+import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.repositories.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,17 @@ public class WorkspaceMembershipService {
     public void verifyMembership(Long workspaceId, Long userId) {
         if (!workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspaceId, userId)) {
             throw new EntityNotFoundException("El usuario no pertenece al workspace indicado");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void verifyCanInvite(Long workspaceId, Long userId) {
+        WorkspaceRole role = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
+                .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"))
+                .getRole();
+
+        if (role == WorkspaceRole.READ_ONLY) {
+            throw new PermissionDeniedException("Los miembros de solo lectura no pueden invitar a otros usuarios");
         }
     }
 

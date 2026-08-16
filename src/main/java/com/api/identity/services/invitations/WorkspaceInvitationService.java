@@ -2,6 +2,7 @@ package com.api.identity.services.invitations;
 
 import com.api.identity.entities.WorkspaceInvitation;
 import com.api.identity.enums.InvitationStatus;
+import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.mappers.WorkspaceInvitationMapper;
@@ -15,7 +16,6 @@ import com.api.identity.services.workspace.WorkspaceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +31,7 @@ public class WorkspaceInvitationService {
     private final UserService userService;
     private final WorkspaceMembershipService workspaceMembershipService;
     private final WorkspaceService workspaceService;
-    private final ApplicationEventPublisher  applicationEventPublisher;
+    private final InvitationEventPublisher invitationEventPublisher;
 
     @Transactional(readOnly = true)
     public List<WorkspaceInvitationDTO> getPendingInvitations() {
@@ -44,7 +44,7 @@ public class WorkspaceInvitationService {
     public void sendInvitation(Long workspaceId, @Valid WorkspaceSendInvitationDTO body) {
         var user = userService.getAuthenticatedUser();
 
-        workspaceMembershipService.verifyMembership(workspaceId, user.getId());
+        workspaceMembershipService.verifyCanInvite(workspaceId, user.getId());
         var workspaceToInvite = workspaceService.findWorkspaceById(workspaceId);
 
         userService.getUserByEmail(body.emails())
@@ -65,7 +65,13 @@ public class WorkspaceInvitationService {
                             .status(InvitationStatus.PENDING)
                             .workspace(workspaceToInvite)
                             .build());
-                    applicationEventPublisher.publishEvent(workspaceInvitationMapper.toDTO(workspaceInvitation));
+                    invitationEventPublisher.publishInvitationCreated(new InvitationCreatedEvent(
+                            workspaceInvitation.getId(),
+                            workspaceToInvite.getId(),
+                            workspaceToInvite.getName(),
+                            user.getEmail(),
+                            userInvited.getEmail(),
+                            workspaceInvitation.getCreatedAt()));
                 });
 
     }
