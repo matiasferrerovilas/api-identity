@@ -2,6 +2,8 @@ package com.api.identity.services.invitations;
 
 import com.api.identity.entities.WorkspaceInvitation;
 import com.api.identity.enums.InvitationStatus;
+import com.api.identity.exceptions.BusinessException;
+import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.mappers.WorkspaceInvitationMapper;
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
@@ -10,7 +12,6 @@ import com.api.identity.repositories.WorkspaceInvitationRepository;
 import com.api.identity.services.user.UserService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
 import com.api.identity.services.workspace.WorkspaceService;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,15 +74,14 @@ public class WorkspaceInvitationService {
         var user = userService.getAuthenticatedUser();
 
         var invitation = workspaceInvitationRepository.findById(invitationDTO.id())
-                .orElseThrow(EntityNotFoundException::new);
+                .orElseThrow(() -> new EntityNotFoundException("Invitación inexistente"));
 
-        if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
-            log.error("La Invitación ya fue rechazada/aceptada");
-            return;
-        }
         if (!invitation.getInvitedUser().getId().equals(user.getId())) {
-            log.error("El usuario no tiene Invitación para el solicitud");
-            return;
+            log.warn("El usuario {} intentó responder una invitación que no le pertenece (id {})", user.getId(), invitationDTO.id());
+            throw new EntityNotFoundException("Invitación inexistente");
+        }
+        if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
+            throw new BusinessException("La invitación ya fue aceptada o rechazada");
         }
         invitation.setStatus(invitationDTO.status() ? InvitationStatus.ACCEPTED : InvitationStatus.REJECTED);
         workspaceInvitationRepository.save(invitation);

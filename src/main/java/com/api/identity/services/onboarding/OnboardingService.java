@@ -1,9 +1,12 @@
 package com.api.identity.services.onboarding;
 
+import com.api.identity.entities.User;
+import com.api.identity.enums.UserRole;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.services.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -19,6 +22,7 @@ import java.util.Optional;
 public class OnboardingService {
     private final OnboardingDoneRepository onboardingDoneRepository;
     private final UserRepository userRepository;
+    private final UserService userService;
 
     @Transactional
     public void markTourAsSeen(String api) {
@@ -35,6 +39,13 @@ public class OnboardingService {
 
     @Transactional
     public void changeUserFirstLoginStatus(Long userId) {
+        User authenticatedUser = userService.getAuthenticatedUser();
+        boolean isAdmin = authenticatedUser.getUserRoles().contains(UserRole.ROLE_ADMIN);
+
+        if (!isAdmin && !authenticatedUser.getId().equals(userId)) {
+            throw new PermissionDeniedException("No podés modificar el first-login de otro usuario");
+        }
+
         userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario inexistente"));
 
