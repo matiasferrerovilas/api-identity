@@ -7,12 +7,14 @@ import com.api.identity.enums.InvitationStatus
 import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.exceptions.PermissionDeniedException
+import com.api.identity.exceptions.RateLimitExceededException
 import com.api.identity.mappers.WorkspaceInvitationMapper
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO
 import com.api.identity.repositories.WorkspaceInvitationRepository
 import com.api.identity.services.invitations.InvitationEventPublisher
 import com.api.identity.services.invitations.WorkspaceInvitationService
+import com.api.identity.services.ratelimit.RateLimiterService
 import com.api.identity.services.user.UserService
 import com.api.identity.services.workspace.WorkspaceMembershipService
 import com.api.identity.services.workspace.WorkspaceService
@@ -26,6 +28,7 @@ class WorkspaceInvitationServiceTest extends Specification {
     WorkspaceMembershipService workspaceMembershipService = Mock(WorkspaceMembershipService)
     WorkspaceService workspaceService = Mock(WorkspaceService)
     InvitationEventPublisher invitationEventPublisher = Mock(InvitationEventPublisher)
+    RateLimiterService rateLimiterService = Mock(RateLimiterService)
 
     WorkspaceInvitationService service = new WorkspaceInvitationService(
             workspaceInvitationRepository,
@@ -33,8 +36,14 @@ class WorkspaceInvitationServiceTest extends Specification {
             userService,
             workspaceMembershipService,
             workspaceService,
-            invitationEventPublisher)
+            invitationEventPublisher,
+            rateLimiterService)
 
+    // Nada de default global acá a propósito: en Spock, la interacción declarada PRIMERO gana
+    // cuando varias matchean (no la última) — un default de setup()/field siempre le gana a un
+    // stub más específico puesto después en el given: de un test puntual. Cada test que necesita
+    // que el rate limiter deje pasar lo stubea explícitamente; el test que verifica el rechazo
+    // no stubea nada y aprovecha que un Mock sin stub devuelve `false` para un boolean.
     def inviter = User.builder().id(1L).email("owner@example.com").build()
     def invited = User.builder().id(2L).email("invited@example.com").build()
     def workspace = Workspace.builder().id(10L).name("Casa").build()
@@ -42,6 +51,7 @@ class WorkspaceInvitationServiceTest extends Specification {
     def "sendInvitation - requires the caller to be allowed to invite before creating anything"() {
         given:
         userService.getAuthenticatedUser() >> inviter
+        rateLimiterService.tryAcquire(_, _, _) >> true
         workspaceService.findWorkspaceById(10L) >> workspace
         userService.getUserByEmail(["invited@example.com"]) >> [invited]
         workspaceInvitationRepository.findByWorkspaceIdAndStatusAndInvitedUserId(10L, InvitationStatus.PENDING, 2L) >> Optional.empty()
@@ -58,6 +68,7 @@ class WorkspaceInvitationServiceTest extends Specification {
     def "sendInvitation - a READ_ONLY member is rejected before any invitation is created"() {
         given:
         userService.getAuthenticatedUser() >> inviter
+        rateLimiterService.tryAcquire(_, _, _) >> true
         workspaceMembershipService.verifyCanInvite(10L, 1L) >> { throw new PermissionDeniedException("Los miembros de solo lectura no pueden invitar a otros usuarios") }
 
         when:
@@ -68,9 +79,25 @@ class WorkspaceInvitationServiceTest extends Specification {
         0 * workspaceInvitationRepository.save(_)
     }
 
+    def "sendInvitation - throws RateLimitExceededException and creates nothing when the limiter rejects"() {
+        given:
+        userService.getAuthenticatedUser() >> inviter
+        // Sin stub para tryAcquire: un Mock sin interacción declarada devuelve `false` para un
+        // método que retorna boolean, que es justo el escenario "límite excedido" que queremos.
+
+        when:
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+
+        then:
+        thrown(RateLimitExceededException)
+        0 * workspaceMembershipService.verifyCanInvite(_, _)
+        0 * workspaceInvitationRepository.save(_)
+    }
+
     def "sendInvitation - skips creating a duplicate when a pending invitation already exists"() {
         given:
         userService.getAuthenticatedUser() >> inviter
+        rateLimiterService.tryAcquire(_, _, _) >> true
         workspaceService.findWorkspaceById(10L) >> workspace
         userService.getUserByEmail(["invited@example.com"]) >> [invited]
         workspaceInvitationRepository.findByWorkspaceIdAndStatusAndInvitedUserId(10L, InvitationStatus.PENDING, 2L) >>

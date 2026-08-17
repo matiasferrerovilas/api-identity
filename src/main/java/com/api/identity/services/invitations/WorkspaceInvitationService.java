@@ -5,11 +5,13 @@ import com.api.identity.enums.InvitationStatus;
 import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
+import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.mappers.WorkspaceInvitationMapper;
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
 import com.api.identity.repositories.WorkspaceInvitationRepository;
+import com.api.identity.services.ratelimit.RateLimiterService;
 import com.api.identity.services.user.UserService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
 import com.api.identity.services.workspace.WorkspaceService;
@@ -19,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.List;
 
 @Service
@@ -26,12 +29,18 @@ import java.util.List;
 @Slf4j
 public class WorkspaceInvitationService {
 
+    // Un usuario legítimo manda invitaciones en tandas ocasionales, no en loop — 10 tandas por
+    // hora deja margen de sobra para uso normal y corta un script que intente floodear emails.
+    private static final int MAX_INVITATION_BATCHES_PER_HOUR = 10;
+    private static final Duration RATE_LIMIT_WINDOW = Duration.ofHours(1);
+
     private final WorkspaceInvitationRepository workspaceInvitationRepository;
     private final WorkspaceInvitationMapper workspaceInvitationMapper;
     private final UserService userService;
     private final WorkspaceMembershipService workspaceMembershipService;
     private final WorkspaceService workspaceService;
     private final InvitationEventPublisher invitationEventPublisher;
+    private final RateLimiterService rateLimiterService;
 
     @Transactional(readOnly = true)
     public List<WorkspaceInvitationDTO> getPendingInvitations() {
@@ -43,6 +52,12 @@ public class WorkspaceInvitationService {
 
     public void sendInvitation(Long workspaceId, @Valid WorkspaceSendInvitationDTO body) {
         var user = userService.getAuthenticatedUser();
+
+        var rateLimitKey = "rate-limit:invitations:" + user.getId();
+        if (!rateLimiterService.tryAcquire(rateLimitKey, MAX_INVITATION_BATCHES_PER_HOUR, RATE_LIMIT_WINDOW)) {
+            throw new RateLimitExceededException(
+                    "Alcanzaste el límite de invitaciones enviadas. Probá de nuevo más tarde.");
+        }
 
         workspaceMembershipService.verifyCanInvite(workspaceId, user.getId());
         var workspaceToInvite = workspaceService.findWorkspaceById(workspaceId);

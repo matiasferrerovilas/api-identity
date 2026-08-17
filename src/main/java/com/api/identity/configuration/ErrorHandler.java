@@ -6,6 +6,7 @@ import com.api.identity.exceptions.EntityAlreadyExistsException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.ErrorResponse;
 import com.api.identity.exceptions.PermissionDeniedException;
+import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.exceptions.ServiceException;
 import jakarta.persistence.EntityExistsException;
 import lombok.extern.slf4j.Slf4j;
@@ -234,6 +235,21 @@ public class ErrorHandler extends ResponseEntityExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(errorResponse);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceededException(RateLimitExceededException ex) {
+        log.warn("Rate limit excedido: {}", ex.getMessage());
+
+        var errorResponse = new ErrorResponse(
+                String.valueOf(HttpStatus.TOO_MANY_REQUESTS.value()),
+                "Too Many Requests",
+                ex.getMessage()
+        );
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(errorResponse);
     }

@@ -6,12 +6,14 @@ import com.api.identity.entities.User
 import com.api.identity.enums.UserType
 import com.api.identity.exceptions.EntityAlreadyExistsException
 import com.api.identity.exceptions.PermissionDeniedException
+import com.api.identity.exceptions.RateLimitExceededException
 import com.api.identity.mappers.UserMapper
 import com.api.identity.records.user.UserMe
 import com.api.identity.records.user.UserToAdd
 import com.api.identity.repositories.OnboardingDoneRepository
 import com.api.identity.repositories.UserRepository
 import com.api.identity.services.api.ApiService
+import com.api.identity.services.ratelimit.RateLimiterService
 import com.api.identity.services.user.UserAddService
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -24,8 +26,9 @@ class UserAddServiceTest extends Specification {
     OnboardingDoneRepository onboardingDoneRepository = Mock(OnboardingDoneRepository)
     UserMapper userMapper = Mock(UserMapper)
     ApiService apiService = Mock(ApiService)
+    RateLimiterService rateLimiterService = Mock(RateLimiterService)
 
-    UserAddService service = new UserAddService(userRepository, onboardingDoneRepository, userMapper, apiService)
+    UserAddService service = new UserAddService(userRepository, onboardingDoneRepository, userMapper, apiService, rateLimiterService)
 
     def request = UserToAdd.builder()
             .email("new@example.com").givenName("Nueva").familyName("Persona")
@@ -41,6 +44,7 @@ class UserAddServiceTest extends Specification {
 
     def "createLogInUser - creates a new user and its onboarding row when neither exists"() {
         given:
+        rateLimiterService.tryAcquire(_, _, _) >> true
         userRepository.findByEmail("new@example.com") >> Optional.empty()
         onboardingDoneRepository.findByUserEmailAndApiName("new@example.com", "api-keep") >> Optional.empty()
         apiService.getOrCreate("api-keep") >> Api.builder().id(1L).name("api-keep").build()
@@ -57,6 +61,7 @@ class UserAddServiceTest extends Specification {
 
     def "createLogInUser - reuses an existing user and only creates the onboarding row"() {
         given:
+        rateLimiterService.tryAcquire(_, _, _) >> true
         def existing = User.builder().id(7L).email("new@example.com").userType(UserType.PERSONAL).build()
         userRepository.findByEmail("new@example.com") >> Optional.of(existing)
         onboardingDoneRepository.findByUserEmailAndApiName("new@example.com", "api-keep") >> Optional.empty()
@@ -74,6 +79,7 @@ class UserAddServiceTest extends Specification {
 
     def "createLogInUser - throws when the user already completed onboarding for that api"() {
         given:
+        rateLimiterService.tryAcquire(_, _, _) >> true
         def existing = User.builder().id(7L).email("new@example.com").build()
         userRepository.findByEmail("new@example.com") >> Optional.of(existing)
         onboardingDoneRepository.findByUserEmailAndApiName("new@example.com", "api-keep") >>
@@ -88,6 +94,7 @@ class UserAddServiceTest extends Specification {
 
     def "createLogInUser - throws PermissionDeniedException when there is no authenticated user"() {
         given:
+        rateLimiterService.tryAcquire(_, _, _) >> true
         SecurityContextHolder.clearContext()
 
         when:
@@ -95,6 +102,20 @@ class UserAddServiceTest extends Specification {
 
         then:
         thrown(PermissionDeniedException)
+    }
+
+    def "createLogInUser - throws RateLimitExceededException and touches nothing when the limiter rejects"() {
+        given:
+        // Sin stub para tryAcquire: un Mock sin interacción declarada devuelve `false` para un
+        // método que retorna boolean — el escenario "límite excedido" que queremos simular.
+
+        when:
+        service.createLogInUser(request, "api-keep")
+
+        then:
+        thrown(RateLimitExceededException)
+        0 * userRepository.save(_)
+        0 * onboardingDoneRepository.save(_)
     }
 
     private static void authenticateAs(String email, String... roles) {

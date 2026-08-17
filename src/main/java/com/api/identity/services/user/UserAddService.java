@@ -5,12 +5,14 @@ import com.api.identity.entities.User;
 import com.api.identity.enums.UserRole;
 import com.api.identity.exceptions.EntityAlreadyExistsException;
 import com.api.identity.exceptions.PermissionDeniedException;
+import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.mappers.UserMapper;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.records.user.UserToAdd;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
 import com.api.identity.services.api.ApiService;
+import com.api.identity.services.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -19,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -34,13 +37,24 @@ public class UserAddService {
 
     private static final EnumSet<UserRole> VALID_ROLES = EnumSet.allOf(UserRole.class);
 
+    // Generoso a propósito: un usuario real onboardea una vez por API, pero puede reintentar
+    // tras un error de red o abrir la app en otro dispositivo — esto solo corta un loop/abuso.
+    private static final int MAX_USER_CREATIONS_PER_HOUR = 20;
+    private static final Duration RATE_LIMIT_WINDOW = Duration.ofHours(1);
+
     private final UserRepository userRepository;
     private final OnboardingDoneRepository onboardingDoneRepository;
     private final UserMapper userMapper;
     private final ApiService apiService;
+    private final RateLimiterService rateLimiterService;
 
     @Transactional
     public UserMe createLogInUser(UserToAdd request, String api) {
+        var rateLimitKey = "rate-limit:user-creation:" + request.email();
+        if (!rateLimiterService.tryAcquire(rateLimitKey, MAX_USER_CREATIONS_PER_HOUR, RATE_LIMIT_WINDOW)) {
+            throw new RateLimitExceededException("Demasiados intentos. Probá de nuevo más tarde.");
+        }
+
         List<String> roles = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
                 .filter(Authentication::isAuthenticated)
                 .map(Authentication::getAuthorities)
