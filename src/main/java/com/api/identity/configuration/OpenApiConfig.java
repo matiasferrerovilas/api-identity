@@ -41,7 +41,7 @@ public class OpenApiConfig {
 
                                 No está expuesto a internet — solo lo consumen api-movements y api-keep.
                                 """)
-                        .version("1.2.0")
+                        .version("1.3.0")
                         .contact(new Contact()
                                 .name("API Support")
                                 .email("api-support@movement.eva-core.com")));

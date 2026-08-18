@@ -144,6 +144,36 @@ Run tests and checkstyle together:
 
 Metrics are available at `/actuator/prometheus` and can be scraped by Prometheus. Health, info, and metrics endpoints are public; the rest of `/actuator/**` requires the `ADMIN` role.
 
+## Demo Mode
+
+A `demo` Spring profile seeds a fixed, idempotent set of demo data so the M2 suite can be shown off without real user data. It is guarded by `@Profile("demo")` (see `DemoDataSeeder`) and never activates under `dev`, `prod`, or the default profile.
+
+Run it with:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=demo'
+```
+
+or, on a built jar/native image:
+
+```bash
+java -jar application.jar --spring.profiles.active=demo
+# or
+./application --spring.profiles.active=demo
+```
+
+`application-demo.yaml` points at the same local MySQL/RabbitMQ/Redis defaults as the Docker Compose setup in [Getting Started](#getting-started) — for a shared/deployed demo environment, override `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` (and the RabbitMQ/Redis equivalents) as env vars, the same way the `prod` profile is configured.
+
+On startup, `DemoDataSeeder` ensures:
+
+- A demo user (`demo@example.com`, `UserType.PERSONAL`).
+- A demo workspace with **id forced to 1** — this is a suite-wide convention. `api-movements` and `api-keep` each have their own `demo` profile that seeds their domain data (movements, goals, files) assuming workspace id `1` already exists in this service. Because `Workspace.id` uses `GenerationType.IDENTITY`, Hibernate won't let a new entity be persisted with a pre-assigned id under that strategy, so the seeder inserts that one row with a raw JDBC `INSERT` instead (MySQL accepts an explicit value for an `AUTO_INCREMENT` column and advances the counter past it, so normal, non-demo workspaces still get ids greater than 1).
+- A `WorkspaceMember` linking the demo user to workspace `1` with role `OWNER`.
+
+Each check (user by email, workspace by id, membership by workspace+user) runs before its insert, so restarting the app in `demo` profile is safe and does not duplicate rows or violate unique constraints.
+
+**For a full demo experience, run all three backends (`api-identity`, `api-movements`, `api-keep`) with `--spring.profiles.active=demo`** — the sibling apps depend on this service's workspace `1` already existing.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

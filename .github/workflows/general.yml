@@ -102,6 +102,40 @@ jobs:
             build.phase
           retention-days: 1
 
+  tag:
+    name: Tag Release
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: build-artifacts
+
+      - name: Get Version
+        id: version
+        run: echo "version=$(cat build.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag if missing
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Tag ${TAG} already exists on remote, skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${TAG}"
+          git push origin "${TAG}"
+
   deploy:
     name: Deploy Docker Image
     needs: [test, build]
