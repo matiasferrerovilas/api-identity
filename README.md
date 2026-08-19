@@ -8,6 +8,7 @@ The shared identity and workspace service for the M2 suite. Handles user auto-pr
 - **Workspaces & membership**: create/list/delete workspaces, with role-based membership (`OWNER`/`COLLABORATOR`/`READ_ONLY`)
 - **Invitations**: invite a user to a workspace by email, accept/decline, rate-limited per user (10 invitation batches/hour) to prevent abuse
 - **Onboarding**: track first-login and product-tour completion per user
+- **Audit log**: who invited, accepted/rejected, joined, or left a workspace, queryable per workspace (`OWNER`/`COLLABORATOR` only)
 - **Rate limiting**: Redis-backed, applied to invitation-sending and user creation (20/hour), fails open if Redis is unavailable
 - **Cross-app events**: invitation and workspace events published to RabbitMQ, consumed by api-movements and api-keep
 - **User authentication**: Keycloak OAuth2 / JWT (RS256) resource server
@@ -105,6 +106,7 @@ All endpoints are under `/v1` and require a valid Keycloak-issued JWT unless not
 | GET | `/v1/workspaces/members` | List members across the caller's workspaces |
 | GET | `/v1/workspaces/{workspaceId}/members/{userId}` | Get a specific membership |
 | DELETE | `/v1/workspaces/{workspaceId}` | Delete a workspace |
+| GET | `/v1/workspaces/{workspaceId}/audit-log` | Workspace audit log — invites, accept/reject, join, leave (most recent first) |
 | GET | `/v1/invitations` | List invitations |
 | POST | `/v1/invitations/{workspaceId}` | Invite a user to a workspace (rate-limited) |
 | PATCH | `/v1/invitations` | Accept/decline an invitation |

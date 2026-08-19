@@ -3,6 +3,7 @@ package com.api.identity.unit.services.invitations
 import com.api.identity.entities.User
 import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceInvitation
+import com.api.identity.enums.AuditAction
 import com.api.identity.enums.InvitationStatus
 import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
@@ -12,6 +13,7 @@ import com.api.identity.mappers.WorkspaceInvitationMapper
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO
 import com.api.identity.repositories.WorkspaceInvitationRepository
+import com.api.identity.services.audit.AuditLogService
 import com.api.identity.services.invitations.InvitationEventPublisher
 import com.api.identity.services.invitations.WorkspaceInvitationService
 import com.api.identity.services.ratelimit.RateLimiterService
@@ -29,6 +31,7 @@ class WorkspaceInvitationServiceTest extends Specification {
     WorkspaceService workspaceService = Mock(WorkspaceService)
     InvitationEventPublisher invitationEventPublisher = Mock(InvitationEventPublisher)
     RateLimiterService rateLimiterService = Mock(RateLimiterService)
+    AuditLogService auditLogService = Mock(AuditLogService)
 
     WorkspaceInvitationService service = new WorkspaceInvitationService(
             workspaceInvitationRepository,
@@ -37,7 +40,8 @@ class WorkspaceInvitationServiceTest extends Specification {
             workspaceMembershipService,
             workspaceService,
             invitationEventPublisher,
-            rateLimiterService)
+            rateLimiterService,
+            auditLogService)
 
     // Nada de default global acá a propósito: en Spock, la interacción declarada PRIMERO gana
     // cuando varias matchean (no la última) — un default de setup()/field siempre le gana a un
@@ -63,6 +67,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         then:
         1 * workspaceMembershipService.verifyCanInvite(10L, 1L)
         1 * invitationEventPublisher.publishInvitationCreated({ it.invitedUserEmail() == "invited@example.com" })
+        1 * auditLogService.record(workspace, AuditAction.INVITATION_SENT, inviter, invited)
     }
 
     def "sendInvitation - a READ_ONLY member is rejected before any invitation is created"() {
@@ -125,6 +130,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         invitation.status == InvitationStatus.ACCEPTED
         1 * workspaceMembershipService.addMembership(10L, invited)
         1 * workspaceInvitationRepository.save(invitation)
+        1 * auditLogService.record(workspace, AuditAction.INVITATION_ACCEPTED, invited, null)
     }
 
     def "acceptRejectInvitation - rejecting does not add membership"() {
@@ -141,6 +147,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         then:
         invitation.status == InvitationStatus.REJECTED
         0 * workspaceMembershipService.addMembership(_, _)
+        1 * auditLogService.record(workspace, AuditAction.INVITATION_REJECTED, invited, null)
     }
 
     def "acceptRejectInvitation - throws when responding to someone else's invitation"() {

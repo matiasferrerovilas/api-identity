@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Minimal audit log (`AuditLog` entity, migration `008__create_audit_log.sql`): records who invited,
+  accepted/rejected, joined, or left a workspace, with a timestamp. Inserted at the existing
+  `sendInvitation`/`acceptRejectInvitation`/`addMembership`/`deleteWorkspace` (leave) call sites — no new
+  business logic, no schema changes beyond the new table. New `GET /v1/workspaces/{workspaceId}/audit-log`
+  endpoint returns it most-recent-first, gated to `OWNER`/`COLLABORATOR` (same permission level as inviting).
+
 ## [1.3.0] - 2026-08-17
 
 ### Added

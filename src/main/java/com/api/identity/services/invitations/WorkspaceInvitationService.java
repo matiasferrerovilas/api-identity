@@ -1,6 +1,7 @@
 package com.api.identity.services.invitations;
 
 import com.api.identity.entities.WorkspaceInvitation;
+import com.api.identity.enums.AuditAction;
 import com.api.identity.enums.InvitationStatus;
 import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
@@ -11,6 +12,7 @@ import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
 import com.api.identity.repositories.WorkspaceInvitationRepository;
+import com.api.identity.services.audit.AuditLogService;
 import com.api.identity.services.ratelimit.RateLimiterService;
 import com.api.identity.services.user.UserService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
@@ -41,6 +43,7 @@ public class WorkspaceInvitationService {
     private final WorkspaceService workspaceService;
     private final InvitationEventPublisher invitationEventPublisher;
     private final RateLimiterService rateLimiterService;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public List<WorkspaceInvitationDTO> getPendingInvitations() {
@@ -80,6 +83,7 @@ public class WorkspaceInvitationService {
                             .status(InvitationStatus.PENDING)
                             .workspace(workspaceToInvite)
                             .build());
+                    auditLogService.record(workspaceToInvite, AuditAction.INVITATION_SENT, user, userInvited);
                     invitationEventPublisher.publishInvitationCreated(new InvitationCreatedEvent(
                             workspaceInvitation.getId(),
                             workspaceToInvite.getId(),
@@ -106,6 +110,9 @@ public class WorkspaceInvitationService {
         }
         invitation.setStatus(invitationDTO.status() ? InvitationStatus.ACCEPTED : InvitationStatus.REJECTED);
         workspaceInvitationRepository.save(invitation);
+        auditLogService.record(invitation.getWorkspace(),
+                invitationDTO.status() ? AuditAction.INVITATION_ACCEPTED : AuditAction.INVITATION_REJECTED,
+                user, null);
         if (invitationDTO.status()) {
             workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
         }

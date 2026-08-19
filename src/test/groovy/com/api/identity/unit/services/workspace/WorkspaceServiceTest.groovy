@@ -1,0 +1,88 @@
+package com.api.identity.unit.services.workspace
+
+import com.api.identity.entities.User
+import com.api.identity.entities.Workspace
+import com.api.identity.entities.WorkspaceMember
+import com.api.identity.enums.AuditAction
+import com.api.identity.enums.WorkspaceRole
+import com.api.identity.mappers.WorkspaceMapper
+import com.api.identity.mappers.WorkspaceMemberMapper
+import com.api.identity.records.audit.AuditLogDTO
+import com.api.identity.repositories.WorkspaceMemberRepository
+import com.api.identity.repositories.WorkspaceRepository
+import com.api.identity.services.audit.AuditLogService
+import com.api.identity.services.user.UserService
+import com.api.identity.services.workspace.WorkspaceMembershipService
+import com.api.identity.services.workspace.WorkspaceService
+import spock.lang.Specification
+
+class WorkspaceServiceTest extends Specification {
+
+    WorkspaceRepository workspaceRepository = Mock(WorkspaceRepository)
+    WorkspaceMapper workspaceMapper = Mock(WorkspaceMapper)
+    WorkspaceMemberRepository workspaceMemberRepository = Mock(WorkspaceMemberRepository)
+    WorkspaceMemberMapper workspaceMemberMapper = Mock(WorkspaceMemberMapper)
+    UserService userService = Mock(UserService)
+    WorkspaceMembershipService workspaceMembershipService = Mock(WorkspaceMembershipService)
+    AuditLogService auditLogService = Mock(AuditLogService)
+
+    WorkspaceService service = new WorkspaceService(
+            workspaceRepository,
+            workspaceMapper,
+            workspaceMemberRepository,
+            workspaceMemberMapper,
+            userService,
+            workspaceMembershipService,
+            auditLogService)
+
+    def owner = User.builder().id(1L).email("owner@example.com").build()
+    def workspace = Workspace.builder().id(10L).name("Casa").build()
+
+    def "deleteWorkspace - removes the membership and records a MEMBER_LEFT audit entry"() {
+        given:
+        def membership = WorkspaceMember.builder()
+                .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.COLLABORATOR).build()
+        userService.getAuthenticatedUser() >> owner
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(10L, 1L) >> Optional.of(membership)
+
+        when:
+        service.deleteWorkspace(10L)
+
+        then:
+        1 * workspaceMemberRepository.delete(membership)
+        1 * auditLogService.record(workspace, AuditAction.MEMBER_LEFT, owner, null)
+    }
+
+    def "deleteWorkspace - transfers ownership to another member before the owner leaves"() {
+        given:
+        def membership = WorkspaceMember.builder()
+                .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.OWNER).build()
+        def other = WorkspaceMember.builder()
+                .id(6L).workspace(workspace).user(User.builder().id(2L).build()).role(WorkspaceRole.COLLABORATOR).build()
+        userService.getAuthenticatedUser() >> owner
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(10L, 1L) >> Optional.of(membership)
+        workspaceMemberRepository.findByWorkspaceId(10L) >> [membership, other]
+
+        when:
+        service.deleteWorkspace(10L)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == other && m.role == WorkspaceRole.OWNER })
+        1 * workspaceMemberRepository.delete(membership)
+    }
+
+    def "getWorkspaceAuditLog - verifies permission before returning the log"() {
+        given:
+        userService.getAuthenticatedUser() >> owner
+        auditLogService.getByWorkspace(10L) >> [
+                new AuditLogDTO(1L, AuditAction.MEMBER_JOINED, "owner@example.com", null, null)
+        ]
+
+        when:
+        def result = service.getWorkspaceAuditLog(10L)
+
+        then:
+        1 * workspaceMembershipService.verifyCanViewAuditLog(10L, 1L)
+        result.size() == 1
+    }
+}

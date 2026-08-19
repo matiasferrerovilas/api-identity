@@ -1,14 +1,17 @@
 package com.api.identity.services.workspace;
 
 import com.api.identity.entities.Workspace;
+import com.api.identity.enums.AuditAction;
 import com.api.identity.enums.WorkspaceRole;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.mappers.WorkspaceMapper;
 import com.api.identity.mappers.WorkspaceMemberMapper;
+import com.api.identity.records.audit.AuditLogDTO;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
 import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.repositories.WorkspaceRepository;
+import com.api.identity.services.audit.AuditLogService;
 import com.api.identity.services.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ public class WorkspaceService {
     private final WorkspaceMemberMapper workspaceMemberMapper;
     private final UserService userService;
     private final WorkspaceMembershipService workspaceMembershipService;
+    private final AuditLogService auditLogService;
 
     @Transactional(readOnly = true)
     public List<WorkspaceMemberDTO> getWorkspaceMembers() {
@@ -64,7 +68,16 @@ public class WorkspaceService {
         }
 
         workspaceMemberRepository.delete(membership);
+        auditLogService.record(membership.getWorkspace(), AuditAction.MEMBER_LEFT, owner, null);
         log.info("Usuario {} salió del workspace {}", owner.getId(), workspaceId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AuditLogDTO> getWorkspaceAuditLog(Long workspaceId) {
+        var user = userService.getAuthenticatedUser();
+        workspaceMembershipService.verifyCanViewAuditLog(workspaceId, user.getId());
+
+        return auditLogService.getByWorkspace(workspaceId);
     }
 
     @Transactional(readOnly = true)

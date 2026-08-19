@@ -1,5 +1,6 @@
 package com.api.identity.controllers;
 
+import com.api.identity.records.audit.AuditLogDTO;
 import com.api.identity.records.workspaces.AddWorkspaceRecord;
 import com.api.identity.records.workspaces.WorkspaceAdded;
 import com.api.identity.records.workspaces.WorkspaceDTO;
@@ -151,6 +152,35 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.OK)
     public void deleteWorkspace(@PathVariable Long workspaceId) {
         workspaceService.deleteWorkspace(workspaceId);
+    }
+
+    @Operation(
+            summary = "Auditoría del workspace",
+            description = "Lista quién invitó, aceptó/rechazó, entró o salió del workspace, más reciente primero. "
+                    + "Requiere ser OWNER o COLLABORATOR del workspace.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Auditoría obtenida",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = AuditLogDTO.class)
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "El usuario es READ_ONLY en el workspace"
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "El usuario no pertenece al workspace indicado"
+                    )
+            }
+    )
+    @GetMapping("/{workspaceId}/audit-log")
+    @ResponseStatus(HttpStatus.OK)
+    public List<AuditLogDTO> getWorkspaceAuditLog(@PathVariable Long workspaceId) {
+        return workspaceService.getWorkspaceAuditLog(workspaceId);
     }
 
 }
