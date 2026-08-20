@@ -3,6 +3,7 @@ package com.api.identity.services.invitations;
 import com.api.identity.entities.WorkspaceInvitation;
 import com.api.identity.enums.AuditAction;
 import com.api.identity.enums.InvitationStatus;
+import com.api.identity.events.InvitationAcceptedEvent;
 import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -95,6 +97,7 @@ public class WorkspaceInvitationService {
 
     }
 
+    @Transactional
     public void acceptRejectInvitation(@Valid AcceptRejectInvitationDTO invitationDTO) {
         var user = userService.getAuthenticatedUser();
 
@@ -115,6 +118,9 @@ public class WorkspaceInvitationService {
                 user, null);
         if (invitationDTO.status()) {
             workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
+            invitationEventPublisher.publishInvitationAccepted(new InvitationAcceptedEvent(
+                    invitation.getId(), invitation.getWorkspace().getId(), invitation.getWorkspace().getName(),
+                    user.getEmail(), LocalDateTime.now()));
         }
         log.debug("Invitación {} actualizada correctamente a {}", invitationDTO.id(), invitation.getStatus());
     }

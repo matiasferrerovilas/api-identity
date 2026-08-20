@@ -57,9 +57,12 @@ public class WorkspaceService {
         var membership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, owner.getId())
                         .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"));
 
+        var otherMembers = workspaceMemberRepository.findByWorkspaceId(workspaceId).stream()
+                .filter(m -> !m.getUser().getId().equals(owner.getId()))
+                .toList();
+
         if (membership.getRole() == WorkspaceRole.OWNER) {
-            workspaceMemberRepository.findByWorkspaceId(workspaceId).stream()
-                    .filter(m -> !m.getUser().getId().equals(owner.getId()))
+            otherMembers.stream()
                     .findFirst()
                     .ifPresent(newOwner -> {
                         newOwner.setRole(WorkspaceRole.OWNER);
@@ -70,6 +73,19 @@ public class WorkspaceService {
         workspaceMemberRepository.delete(membership);
         auditLogService.record(membership.getWorkspace(), AuditAction.MEMBER_LEFT, owner, null);
         log.info("Usuario {} salió del workspace {}", owner.getId(), workspaceId);
+
+        if (otherMembers.isEmpty()) {
+            var workspace = membership.getWorkspace();
+            workspace.setActive(false);
+            workspaceRepository.save(workspace);
+            log.info("Workspace {} se quedó sin miembros y fue desactivado", workspaceId);
+        }
+    }
+
+    @Transactional
+    public void removeMember(Long workspaceId, Long targetUserId) {
+        var actor = userService.getAuthenticatedUser();
+        workspaceMembershipService.removeMembership(workspaceId, actor, targetUserId);
     }
 
     @Transactional(readOnly = true)

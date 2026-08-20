@@ -21,6 +21,8 @@ public class RabbitConfig {
 
     public static final String IDENTITY_TOPIC_EXCHANGE = "identity.topic";
     public static final String ROUTING_KEY_INVITATION_SENT = "identity.invitation.sent";
+    public static final String ROUTING_KEY_INVITATION_ACCEPTED = "identity.invitation.accepted";
+    public static final String ROUTING_KEY_MEMBER_REMOVED = "identity.member.removed";
 
     @Bean
     public JacksonJsonMessageConverter jackson2JsonMessageConverter(JsonMapper jsonMapper) {

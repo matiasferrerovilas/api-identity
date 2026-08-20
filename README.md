@@ -101,6 +101,7 @@ All endpoints are under `/v1` and require a valid Keycloak-issued JWT unless not
 | GET | `/v1/users` | List users |
 | POST | `/v1/users` | Create a user |
 | PATCH | `/v1/users/me/type` | Update the current user's type |
+| POST | `/v1/onboarding/start` | Atomically create a user and their first workspace(s) in one transaction |
 | POST | `/v1/workspaces` | Create a workspace |
 | GET | `/v1/workspaces/{workspaceId}` | Get a workspace |
 | GET | `/v1/workspaces/members` | List members across the caller's workspaces |

@@ -131,6 +131,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         1 * workspaceMembershipService.addMembership(10L, invited)
         1 * workspaceInvitationRepository.save(invitation)
         1 * auditLogService.record(workspace, AuditAction.INVITATION_ACCEPTED, invited, null)
+        1 * invitationEventPublisher.publishInvitationAccepted({ it.invitationId() == 5L && it.acceptedByEmail() == "invited@example.com" })
     }
 
     def "acceptRejectInvitation - rejecting does not add membership"() {
@@ -148,6 +149,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         invitation.status == InvitationStatus.REJECTED
         0 * workspaceMembershipService.addMembership(_, _)
         1 * auditLogService.record(workspace, AuditAction.INVITATION_REJECTED, invited, null)
+        0 * invitationEventPublisher.publishInvitationAccepted(_)
     }
 
     def "acceptRejectInvitation - throws when responding to someone else's invitation"() {

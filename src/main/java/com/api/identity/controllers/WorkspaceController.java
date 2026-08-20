@@ -155,6 +155,32 @@ public class WorkspaceController {
     }
 
     @Operation(
+            summary = "Eliminar un miembro de un workspace",
+            description = "Elimina al usuario indicado del workspace. Requiere que quien invoca sea OWNER del workspace, "
+                    + "o tenga el rol global ROLE_ADMIN. Si un administrador elimina al OWNER, el administrador pasa "
+                    + "a ser el nuevo OWNER del workspace.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Miembro eliminado"
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "Quien invoca no es OWNER ni administrador, o intenta eliminarse a sí mismo"
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "El usuario indicado no pertenece al workspace"
+                    )
+            }
+    )
+    @DeleteMapping("/{workspaceId}/members/{userId}")
+    @ResponseStatus(HttpStatus.OK)
+    public void removeMember(@PathVariable Long workspaceId, @PathVariable Long userId) {
+        workspaceService.removeMember(workspaceId, userId);
+    }
+
+    @Operation(
             summary = "Auditoría del workspace",
             description = "Lista quién invitó, aceptó/rechazó, entró o salió del workspace, más reciente primero. "
                     + "Requiere ser OWNER o COLLABORATOR del workspace.",

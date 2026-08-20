@@ -7,8 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `WorkspaceInvitationService.acceptRejectInvitation` threw `LazyInitializationException` on
+  `Workspace.name` when accepting an invitation: the method wasn't `@Transactional`, so by the time
+  it read `invitation.getWorkspace().getName()` to build the `InvitationAcceptedEvent`, the session
+  that fetched `invitation` had already closed, leaving the lazy `@ManyToOne workspace` association
+  as an uninitialized proxy. Added `@Transactional` to keep one session open for the whole method.
+
 ### Added
 
+- `POST /v1/onboarding/start` — creates a user and their first workspace(s) in a single
+  `@Transactional` call (`OnboardingService.start`), so a client never ends up with a user but no
+  workspace (or vice versa) if something fails between two separate requests. Replaces the pattern
+  of a gateway app calling `POST /v1/users` then `POST /v1/workspaces` itself; used by both
+  `api-movements` and `api-keep`'s onboarding flows.
+- `WorkspaceMemberDTO.Metadata` now includes `memberDetails` (userId, email, role per member), not
+  just the flat email list — needed so a client can call the kick-member endpoint, which requires a
+  userId. Purely additive, existing `members: List<String>` consumers are unaffected.
+- Two new RabbitMQ events on `identity.topic` (previously only invitation-sent existed): `identity.invitation.accepted`
+  (published from `WorkspaceInvitationService.acceptRejectInvitation`) and `identity.member.removed` (published from
+  `WorkspaceMembershipService.removeMembership`, alongside the new kick-member feature). Sibling services now know
+  in real time when someone gains or loses access to a shared workspace, not just when they're invited.
 - Minimal audit log (`AuditLog` entity, migration `008__create_audit_log.sql`): records who invited,
   accepted/rejected, joined, or left a workspace, with a timestamp. Inserted at the existing
   `sendInvitation`/`acceptRejectInvitation`/`addMembership`/`deleteWorkspace` (leave) call sites — no new

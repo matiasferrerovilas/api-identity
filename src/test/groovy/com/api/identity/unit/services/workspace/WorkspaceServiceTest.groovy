@@ -42,8 +42,11 @@ class WorkspaceServiceTest extends Specification {
         given:
         def membership = WorkspaceMember.builder()
                 .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.COLLABORATOR).build()
+        def other = WorkspaceMember.builder()
+                .id(6L).workspace(workspace).user(User.builder().id(2L).build()).role(WorkspaceRole.COLLABORATOR).build()
         userService.getAuthenticatedUser() >> owner
         workspaceMemberRepository.findByWorkspaceIdAndUserId(10L, 1L) >> Optional.of(membership)
+        workspaceMemberRepository.findByWorkspaceId(10L) >> [membership, other]
 
         when:
         service.deleteWorkspace(10L)
@@ -51,6 +54,7 @@ class WorkspaceServiceTest extends Specification {
         then:
         1 * workspaceMemberRepository.delete(membership)
         1 * auditLogService.record(workspace, AuditAction.MEMBER_LEFT, owner, null)
+        0 * workspaceRepository.save(_)
     }
 
     def "deleteWorkspace - transfers ownership to another member before the owner leaves"() {
@@ -69,6 +73,35 @@ class WorkspaceServiceTest extends Specification {
         then:
         1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == other && m.role == WorkspaceRole.OWNER })
         1 * workspaceMemberRepository.delete(membership)
+        0 * workspaceRepository.save(_)
+    }
+
+    def "deleteWorkspace - deactivates the workspace when the last member leaves"() {
+        given:
+        def membership = WorkspaceMember.builder()
+                .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.OWNER).build()
+        userService.getAuthenticatedUser() >> owner
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(10L, 1L) >> Optional.of(membership)
+        workspaceMemberRepository.findByWorkspaceId(10L) >> [membership]
+
+        when:
+        service.deleteWorkspace(10L)
+
+        then:
+        1 * workspaceMemberRepository.delete(membership)
+        0 * workspaceMemberRepository.save(_)
+        1 * workspaceRepository.save({ Workspace w -> w == workspace && !w.active })
+    }
+
+    def "removeMember - delegates to WorkspaceMembershipService with the authenticated actor"() {
+        given:
+        userService.getAuthenticatedUser() >> owner
+
+        when:
+        service.removeMember(10L, 3L)
+
+        then:
+        1 * workspaceMembershipService.removeMembership(10L, owner, 3L)
     }
 
     def "getWorkspaceAuditLog - verifies permission before returning the log"() {

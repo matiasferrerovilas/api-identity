@@ -4,13 +4,16 @@ import com.api.identity.entities.User
 import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceMember
 import com.api.identity.enums.AuditAction
+import com.api.identity.enums.UserRole
 import com.api.identity.enums.WorkspaceRole
 import com.api.identity.exceptions.EntityAlreadyExistsException
 import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.exceptions.PermissionDeniedException
 import com.api.identity.repositories.WorkspaceMemberRepository
 import com.api.identity.repositories.WorkspaceRepository
+import com.api.identity.events.MemberRemovedEvent
 import com.api.identity.services.audit.AuditLogService
+import com.api.identity.services.workspace.WorkspaceMembershipEventPublisher
 import com.api.identity.services.workspace.WorkspaceMembershipService
 import spock.lang.Specification
 import spock.lang.Unroll
@@ -20,9 +23,10 @@ class WorkspaceMembershipServiceTest extends Specification {
     WorkspaceMemberRepository workspaceMemberRepository = Mock(WorkspaceMemberRepository)
     WorkspaceRepository workspaceRepository = Mock(WorkspaceRepository)
     AuditLogService auditLogService = Mock(AuditLogService)
+    WorkspaceMembershipEventPublisher workspaceMembershipEventPublisher = Mock(WorkspaceMembershipEventPublisher)
 
     WorkspaceMembershipService service = new WorkspaceMembershipService(
-            workspaceMemberRepository, workspaceRepository, auditLogService)
+            workspaceMemberRepository, workspaceRepository, auditLogService, workspaceMembershipEventPublisher)
 
     def "verifyMembership - does not throw when the user belongs to the workspace"() {
         given:
@@ -162,5 +166,124 @@ class WorkspaceMembershipServiceTest extends Specification {
 
         then:
         thrown(EntityNotFoundException)
+    }
+
+    def "removeMembership - throws PermissionDeniedException when the actor tries to remove themselves"() {
+        given:
+        def actor = User.builder().id(2L).build()
+
+        when:
+        service.removeMembership(1L, actor, 2L)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.delete(_)
+    }
+
+    def "removeMembership - throws EntityNotFoundException when the target does not belong to the workspace"() {
+        given:
+        def actor = User.builder().id(2L).build()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.empty()
+
+        when:
+        service.removeMembership(1L, actor, 3L)
+
+        then:
+        thrown(EntityNotFoundException)
+    }
+
+    def "removeMembership - OWNER can remove a COLLABORATOR"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).email("owner@example.com").build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+        def targetUser = User.builder().id(3L).email("target@example.com").build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(targetUser).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.removeMembership(1L, actor, 3L)
+
+        then:
+        1 * workspaceMemberRepository.delete(targetMembership)
+        1 * auditLogService.record(workspace, AuditAction.MEMBER_REMOVED, actor, targetUser)
+        1 * workspaceMembershipEventPublisher.publishMemberRemoved({ MemberRemovedEvent e ->
+            e.workspaceId() == 1L && e.removedByEmail() == "owner@example.com" && e.removedUserEmail() == "target@example.com"
+        })
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "removeMembership - a plain COLLABORATOR without ROLE_ADMIN cannot remove members"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.COLLABORATOR).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(User.builder().id(3L).build()).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.removeMembership(1L, actor, 3L)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.delete(_)
+    }
+
+    def "removeMembership - a global admin who is not a member can remove any member"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(User.builder().id(3L).build()).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
+
+        when:
+        service.removeMembership(1L, actor, 3L)
+
+        then:
+        1 * workspaceMemberRepository.delete(targetMembership)
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "removeMembership - when an admin removes the OWNER, the admin becomes the new OWNER"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def ownerUser = User.builder().id(3L).build()
+        def ownerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(ownerUser).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(ownerMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
+
+        when:
+        service.removeMembership(1L, admin, 3L)
+
+        then:
+        1 * workspaceMemberRepository.delete(ownerMembership)
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m.user == admin && m.role == WorkspaceRole.OWNER })
+    }
+
+    def "removeMembership - when an admin who is already a member removes the OWNER, their existing membership is promoted"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def adminMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(admin).role(WorkspaceRole.READ_ONLY).build()
+        def ownerUser = User.builder().id(3L).build()
+        def ownerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(ownerUser).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(ownerMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(adminMembership)
+
+        when:
+        service.removeMembership(1L, admin, 3L)
+
+        then:
+        1 * workspaceMemberRepository.delete(ownerMembership)
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == adminMembership && m.role == WorkspaceRole.OWNER })
     }
 }
