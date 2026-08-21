@@ -1,6 +1,7 @@
 package com.api.identity.repositories;
 
 import com.api.identity.entities.WorkspaceMember;
+import com.api.identity.enums.WorkspaceRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,6 +27,8 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
     Optional<WorkspaceMember> findByWorkspaceIdAndUserId(Long workspaceId, Long userId);
 
     List<WorkspaceMember> findByWorkspaceId(Long workspaceId);
+
+    Optional<WorkspaceMember> findByWorkspaceIdAndRole(Long workspaceId, WorkspaceRole role);
 
     void deleteByWorkspaceId(Long workspaceId);
 }

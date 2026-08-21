@@ -321,6 +321,7 @@ class WorkspaceMembershipServiceTest extends Specification {
 
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(newOwnerMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndRole(1L, WorkspaceRole.OWNER) >> Optional.of(actorMembership)
 
         when:
         service.transferOwnership(1L, actor, 3L)
@@ -331,21 +332,44 @@ class WorkspaceMembershipServiceTest extends Specification {
         1 * auditLogService.record(workspace, AuditAction.OWNERSHIP_TRANSFERRED, actor, newOwnerUser)
     }
 
-    def "transferOwnership - a global admin who is not a member can transfer ownership without being demoted"() {
+    def "transferOwnership - a global admin who is not the OWNER still demotes the actual current OWNER, not the admin"() {
         given:
         def workspace = Workspace.builder().id(1L).build()
         def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def previousOwnerUser = User.builder().id(4L).build()
+        def previousOwnerMembership = WorkspaceMember.builder().id(12L).workspace(workspace).user(previousOwnerUser).role(WorkspaceRole.OWNER).build()
         def newOwnerUser = User.builder().id(3L).build()
         def newOwnerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(newOwnerUser).role(WorkspaceRole.COLLABORATOR).build()
 
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(newOwnerMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndRole(1L, WorkspaceRole.OWNER) >> Optional.of(previousOwnerMembership)
 
         when:
         service.transferOwnership(1L, admin, 3L)
 
         then:
         1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == newOwnerMembership && m.role == WorkspaceRole.OWNER })
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == previousOwnerMembership && m.role == WorkspaceRole.COLLABORATOR })
+    }
+
+    def "transferOwnership - does not re-save the new owner as its own previous-owner demotion target"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def newOwnerUser = User.builder().id(3L).build()
+        def newOwnerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(newOwnerUser).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(newOwnerMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndRole(1L, WorkspaceRole.OWNER) >> Optional.of(newOwnerMembership)
+
+        when:
+        service.transferOwnership(1L, admin, 3L)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == newOwnerMembership && m.role == WorkspaceRole.OWNER })
+        0 * workspaceMemberRepository.save({ WorkspaceMember m -> m.role == WorkspaceRole.COLLABORATOR })
     }
 
     def "transferOwnership - a plain COLLABORATOR without ROLE_ADMIN cannot transfer ownership"() {

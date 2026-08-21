@@ -106,7 +106,9 @@ All endpoints are under `/v1` and require a valid Keycloak-issued JWT unless not
 | GET | `/v1/workspaces/{workspaceId}` | Get a workspace |
 | GET | `/v1/workspaces/members` | List members across the caller's workspaces |
 | GET | `/v1/workspaces/{workspaceId}/members/{userId}` | Get a specific membership |
-| DELETE | `/v1/workspaces/{workspaceId}` | Delete a workspace |
+| DELETE | `/v1/workspaces/{workspaceId}` | Leave a workspace (removes the caller's own membership) |
+| PATCH | `/v1/workspaces/{workspaceId}/transfer-ownership` | Transfer workspace ownership to another member |
+| DELETE | `/v1/workspaces/{workspaceId}/members/{userId}` | Remove a member from a workspace |
 | GET | `/v1/workspaces/{workspaceId}/audit-log` | Workspace audit log — invites, accept/reject, join, leave (most recent first) |
 | GET | `/v1/invitations` | List invitations |
 | POST | `/v1/invitations/{workspaceId}` | Invite a user to a workspace (rate-limited) |
@@ -145,7 +147,10 @@ Run tests and checkstyle together:
 
 ## Monitoring
 
-Metrics are available at `/actuator/prometheus` and can be scraped by Prometheus. Health, info, and metrics endpoints are public; the rest of `/actuator/**` requires the `ADMIN` role.
+`/actuator/health`, `/actuator/info`, and `/actuator/metrics` (JSON) are public; the rest of
+`/actuator/**` requires the `ADMIN` role. `/actuator/prometheus` is allowed through security but
+currently 404s — `micrometer-registry-prometheus` isn't on the classpath yet, so there's no
+Prometheus-format scrape endpoint despite the permitted path.
 
 ## Demo Mode
 

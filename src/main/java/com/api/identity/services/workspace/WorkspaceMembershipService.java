@@ -134,15 +134,19 @@ public class WorkspaceMembershipService {
                 .orElseThrow(() -> new EntityNotFoundException("El usuario indicado no pertenece al workspace"));
 
         var workspace = newOwnerMembership.getWorkspace();
+
+        // Degrada al OWNER actual del workspace, no a la membresía del actor — si quien transfiere
+        // es un ROLE_ADMIN que no es el OWNER (o ni siquiera es miembro), degradar solo la membresía
+        // del actor dejaba al OWNER anterior intacto y el workspace terminaba con dos OWNERs.
+        workspaceMemberRepository.findByWorkspaceIdAndRole(workspaceId, WorkspaceRole.OWNER)
+                .filter(currentOwner -> !currentOwner.getId().equals(newOwnerMembership.getId()))
+                .ifPresent(currentOwner -> {
+                    currentOwner.setRole(WorkspaceRole.COLLABORATOR);
+                    workspaceMemberRepository.save(currentOwner);
+                });
+
         newOwnerMembership.setRole(WorkspaceRole.OWNER);
         workspaceMemberRepository.save(newOwnerMembership);
-
-        actorMembership
-                .filter(m -> m.getRole() == WorkspaceRole.OWNER)
-                .ifPresent(m -> {
-                    m.setRole(WorkspaceRole.COLLABORATOR);
-                    workspaceMemberRepository.save(m);
-                });
 
         auditLogService.record(workspace, AuditAction.OWNERSHIP_TRANSFERRED, actor, newOwnerMembership.getUser());
         log.info("Usuario {} transfirió la titularidad del workspace {} a {}",

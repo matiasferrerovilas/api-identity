@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `spring.rabbitmq.username`/`password` in `application-prod.yaml` were the only prod secret still
+  hardcoded in plain text (`api-identity`/`api-identity`) while `DB_USERNAME`/`DB_PASSWORD`/
+  `REDIS_PASSWORD`/`CORS_ALLOWED_ORIGINS` in the same file were already env vars — now
+  `${RABBIT_USERNAME}`/`${RABBIT_PASSWORD}`, no default.
+
 ### Changed
 
 - `WorkspaceController.deleteWorkspace`/`WorkspaceService.deleteWorkspace` renamed to
@@ -14,11 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   /v1/workspaces/{workspaceId}`, unchanged), not the workspace itself; the old name misled readers
   into thinking it deleted the workspace. Pure rename, no behavior or contract change.
 - New `PATCH /v1/workspaces/{workspaceId}/transfer-ownership` (`TransferOwnershipDTO.newOwnerUserId`)
-  lets an OWNER (or a global `ROLE_ADMIN`) explicitly hand ownership to another member — the OWNER
-  is demoted to `COLLABORATOR` in the same call. Additive: `leaveWorkspace` still auto-picks another
-  member as the new OWNER when its own OWNER leaves, unchanged, so existing "leave workspace" UI
-  across the frontends keeps working without a required transfer-first step. New `AuditAction.
-  OWNERSHIP_TRANSFERRED` audit entry recorded on transfer. No frontend wired up to this endpoint yet.
+  lets an OWNER (or a global `ROLE_ADMIN`) explicitly hand ownership to another member. Demotes the
+  workspace's actual current OWNER (looked up via `WorkspaceMemberRepository.
+  findByWorkspaceIdAndRole`), not the acting user's own membership — an earlier version of this
+  demoted the actor instead, so an admin-initiated transfer (admin isn't the OWNER, possibly not
+  even a member) left the previous OWNER untouched and the workspace with two `OWNER` rows; caught
+  before this ever shipped. Additive: `leaveWorkspace` still auto-picks another member as the new
+  OWNER when its own OWNER leaves, unchanged, so existing "leave workspace" UI across the frontends
+  keeps working without a required transfer-first step. New `AuditAction.OWNERSHIP_TRANSFERRED`
+  audit entry recorded on transfer. No frontend wired up to this endpoint yet.
 - CORS allowed origins moved out of `SecurityConfiguration.corsConfigurationSource()` and into config
   (new `CorsProperties`, `@ConfigurationProperties(prefix = "app.cors")`, same pattern as
   `JwtProperties`): `application.yaml` keeps the current 3 origins as the dev/base default,
@@ -32,8 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Correlation ids across the event/log chain: a new `CorrelationIdFilter` (`com.api.identity.
   logging`, highest-precedence servlet filter) stamps every request with an id — reused from an
-  incoming `X-Correlation-Id` header when a gateway app already has one, generated fresh otherwise —
-  puts it in MDC (`logging.pattern.level` now includes `%X{correlationId}` so every log line for the
+  incoming `X-Correlation-Id` header when a gateway app already has one and it looks like an id
+  (≤100 chars, `[A-Za-z0-9._-]+`), generated fresh otherwise, so an arbitrary caller-supplied string
+  never lands in every log line/MDC value unvalidated. Puts it in MDC (`logging.pattern.level` now
+  includes `%X{correlationId}` so every log line for the
   request carries it) and echoes it back as a response header. `CorrelationIdHolder.current()` reads
   it from anywhere in the call stack; `MemberRemovedEvent`, `InvitationCreatedEvent`, and
   `InvitationAcceptedEvent` all gained a `correlationId` field populated from it, so RabbitMQ
@@ -44,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- README: the endpoint table still called `DELETE /v1/workspaces/{workspaceId}` "Delete a
+  workspace" (predates the `leaveWorkspace` rename) and was missing `PATCH .../transfer-ownership`
+  and `DELETE .../members/{userId}` entirely, despite both existing. Monitoring section claimed
+  `/actuator/prometheus` serves metrics — it 404s, since `micrometer-registry-prometheus` isn't a
+  dependency, even though the path is permitted in `SecurityConfiguration`.
 - `WorkspaceService.leaveWorkspace` (the "leave workspace" endpoint) now deactivates the workspace
   (`isActive = false`) when the leaving member was the last one. Previously the membership row was
   deleted but the workspace itself lived on forever with no members and no owner — no way to find
