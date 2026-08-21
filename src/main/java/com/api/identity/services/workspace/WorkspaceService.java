@@ -52,7 +52,7 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public void deleteWorkspace(Long workspaceId) {
+    public void leaveWorkspace(Long workspaceId) {
         var owner = userService.getAuthenticatedUser();
         var membership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, owner.getId())
                         .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"));
@@ -86,6 +86,12 @@ public class WorkspaceService {
     public void removeMember(Long workspaceId, Long targetUserId) {
         var actor = userService.getAuthenticatedUser();
         workspaceMembershipService.removeMembership(workspaceId, actor, targetUserId);
+    }
+
+    @Transactional
+    public void transferOwnership(Long workspaceId, Long newOwnerUserId) {
+        var actor = userService.getAuthenticatedUser();
+        workspaceMembershipService.transferOwnership(workspaceId, actor, newOwnerUserId);
     }
 
     @Transactional(readOnly = true)

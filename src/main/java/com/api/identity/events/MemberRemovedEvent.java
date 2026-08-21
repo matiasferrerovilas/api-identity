@@ -12,5 +12,6 @@ public record MemberRemovedEvent(
         String workspaceName,
         String removedByEmail,
         String removedUserEmail,
-        LocalDateTime removedAt) {
+        LocalDateTime removedAt,
+        String correlationId) {
 }

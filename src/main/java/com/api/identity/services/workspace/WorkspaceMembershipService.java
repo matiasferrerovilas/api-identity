@@ -9,6 +9,7 @@ import com.api.identity.events.MemberRemovedEvent;
 import com.api.identity.exceptions.EntityAlreadyExistsException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.PermissionDeniedException;
+import com.api.identity.logging.CorrelationIdHolder;
 import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.repositories.WorkspaceRepository;
 import com.api.identity.services.audit.AuditLogService;
@@ -96,7 +97,7 @@ public class WorkspaceMembershipService {
         auditLogService.record(workspace, AuditAction.MEMBER_REMOVED, actor, targetMembership.getUser());
         workspaceMembershipEventPublisher.publishMemberRemoved(new MemberRemovedEvent(
                 workspace.getId(), workspace.getName(), actor.getEmail(),
-                targetMembership.getUser().getEmail(), LocalDateTime.now()));
+                targetMembership.getUser().getEmail(), LocalDateTime.now(), CorrelationIdHolder.current()));
         log.info("Usuario {} eliminó a {} del workspace {}", actor.getEmail(), targetMembership.getUser().getEmail(), workspaceId);
 
         if (removingOwner && isAdmin) {
@@ -114,5 +115,37 @@ public class WorkspaceMembershipService {
             }
             log.info("El administrador {} pasó a ser OWNER del workspace {} tras eliminar al owner anterior", actor.getEmail(), workspaceId);
         }
+    }
+
+    public void transferOwnership(Long workspaceId, User actor, Long newOwnerUserId) {
+        boolean isAdmin = actor.getUserRoles().contains(UserRole.ROLE_ADMIN);
+        var actorMembership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, actor.getId());
+        boolean isOwner = actorMembership.map(m -> m.getRole() == WorkspaceRole.OWNER).orElse(false);
+
+        if (!isOwner && !isAdmin) {
+            throw new PermissionDeniedException("Solo el OWNER del workspace o un administrador pueden transferir la titularidad");
+        }
+
+        if (actor.getId().equals(newOwnerUserId)) {
+            throw new PermissionDeniedException("No podés transferirte la titularidad a vos mismo");
+        }
+
+        var newOwnerMembership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, newOwnerUserId)
+                .orElseThrow(() -> new EntityNotFoundException("El usuario indicado no pertenece al workspace"));
+
+        var workspace = newOwnerMembership.getWorkspace();
+        newOwnerMembership.setRole(WorkspaceRole.OWNER);
+        workspaceMemberRepository.save(newOwnerMembership);
+
+        actorMembership
+                .filter(m -> m.getRole() == WorkspaceRole.OWNER)
+                .ifPresent(m -> {
+                    m.setRole(WorkspaceRole.COLLABORATOR);
+                    workspaceMemberRepository.save(m);
+                });
+
+        auditLogService.record(workspace, AuditAction.OWNERSHIP_TRANSFERRED, actor, newOwnerMembership.getUser());
+        log.info("Usuario {} transfirió la titularidad del workspace {} a {}",
+                actor.getEmail(), workspaceId, newOwnerMembership.getUser().getEmail());
     }
 }

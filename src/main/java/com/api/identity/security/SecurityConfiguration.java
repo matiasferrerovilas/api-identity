@@ -1,5 +1,6 @@
 package com.api.identity.security;
 
+import com.api.identity.configuration.properties.CorsProperties;
 import com.api.identity.configuration.properties.JwtProperties;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,7 @@ public class SecurityConfiguration {
 
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
     private final JwtProperties jwtProperties;
+    private final CorsProperties corsProperties;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) {
@@ -55,11 +57,7 @@ public class SecurityConfiguration {
 
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "https://identity.eva-core.com",
-                "http://localhost:5173",
-                "http://localhost:8081"
-        ));
+        configuration.setAllowedOrigins(corsProperties.allowedOrigins());
 
         configuration.setAllowCredentials(true);
         configuration.setAllowedHeaders(List.of(

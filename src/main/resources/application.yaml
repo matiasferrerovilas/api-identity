@@ -10,6 +10,13 @@ jwt:
       principle-attribute: email
       resource-id: admin-m2
 
+app:
+  cors:
+    allowed-origins:
+      - https://identity.eva-core.com
+      - http://localhost:5173
+      - http://localhost:8081
+
 spring:
   threads:
     virtual:
@@ -46,6 +53,8 @@ spring:
     banner-mode: off
 
 logging:
+  pattern:
+    level: "%5p [%X{correlationId:-}]"
   level:
     org.springframework.security: INFO
     org.hibernate: WARN

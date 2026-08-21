@@ -5,6 +5,7 @@ import com.api.identity.records.workspaces.AddWorkspaceRecord;
 import com.api.identity.records.workspaces.WorkspaceAdded;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
+import com.api.identity.records.workspaces.TransferOwnershipDTO;
 import com.api.identity.services.workspace.WorkspaceAddService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
 import com.api.identity.services.workspace.WorkspaceService;
@@ -19,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -135,12 +137,14 @@ public class WorkspaceController {
     }
 
     @Operation(
-            summary = "Eliminar un workspace",
-            description = "Elimina el workspace indicado. Requiere que el usuario autenticado pertenezca a dicho workspace.",
+            summary = "Salir de un workspace",
+            description = "El usuario autenticado abandona el workspace indicado. Si es el OWNER, la titularidad "
+                    + "pasa automáticamente a otro miembro (usar el endpoint de transferir titularidad para elegir "
+                    + "a quién explícitamente). Si era el último miembro, el workspace queda desactivado.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "Workspace eliminado"
+                            description = "El usuario salió del workspace"
                     ),
                     @ApiResponse(
                             responseCode = "404",
@@ -150,8 +154,34 @@ public class WorkspaceController {
     )
     @DeleteMapping("/{workspaceId}")
     @ResponseStatus(HttpStatus.OK)
-    public void deleteWorkspace(@PathVariable Long workspaceId) {
-        workspaceService.deleteWorkspace(workspaceId);
+    public void leaveWorkspace(@PathVariable Long workspaceId) {
+        workspaceService.leaveWorkspace(workspaceId);
+    }
+
+    @Operation(
+            summary = "Transferir la titularidad de un workspace",
+            description = "Convierte al usuario indicado en el nuevo OWNER del workspace. Requiere que quien invoca "
+                    + "sea el OWNER actual o tenga el rol global ROLE_ADMIN; si quien invoca era OWNER, pasa a "
+                    + "COLLABORATOR.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Titularidad transferida"
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "Quien invoca no es OWNER ni administrador, o intenta transferirse la titularidad a sí mismo"
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "El usuario indicado no pertenece al workspace"
+                    )
+            }
+    )
+    @PatchMapping("/{workspaceId}/transfer-ownership")
+    @ResponseStatus(HttpStatus.OK)
+    public void transferOwnership(@PathVariable Long workspaceId, @Valid @RequestBody TransferOwnershipDTO dto) {
+        workspaceService.transferOwnership(workspaceId, dto.newOwnerUserId());
     }
 
     @Operation(

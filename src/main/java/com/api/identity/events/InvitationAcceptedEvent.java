@@ -12,5 +12,6 @@ public record InvitationAcceptedEvent(
         Long workspaceId,
         String workspaceName,
         String acceptedByEmail,
-        LocalDateTime acceptedAt) {
+        LocalDateTime acceptedAt,
+        String correlationId) {
 }

@@ -7,8 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `WorkspaceController.deleteWorkspace`/`WorkspaceService.deleteWorkspace` renamed to
+  `leaveWorkspace` — the method actually removes the authenticated user's own membership (`DELETE
+  /v1/workspaces/{workspaceId}`, unchanged), not the workspace itself; the old name misled readers
+  into thinking it deleted the workspace. Pure rename, no behavior or contract change.
+- New `PATCH /v1/workspaces/{workspaceId}/transfer-ownership` (`TransferOwnershipDTO.newOwnerUserId`)
+  lets an OWNER (or a global `ROLE_ADMIN`) explicitly hand ownership to another member — the OWNER
+  is demoted to `COLLABORATOR` in the same call. Additive: `leaveWorkspace` still auto-picks another
+  member as the new OWNER when its own OWNER leaves, unchanged, so existing "leave workspace" UI
+  across the frontends keeps working without a required transfer-first step. New `AuditAction.
+  OWNERSHIP_TRANSFERRED` audit entry recorded on transfer. No frontend wired up to this endpoint yet.
+- CORS allowed origins moved out of `SecurityConfiguration.corsConfigurationSource()` and into config
+  (new `CorsProperties`, `@ConfigurationProperties(prefix = "app.cors")`, same pattern as
+  `JwtProperties`): `application.yaml` keeps the current 3 origins as the dev/base default,
+  `application-prod.yaml` now reads `app.cors.allowed-origins` from the `CORS_ALLOWED_ORIGINS` env
+  var (comma-separated, Spring's relaxed binding splits it into the list) instead of a fixed prod
+  value baked into the same Java list. A self-hoster's own frontend origin no longer requires editing
+  and recompiling `SecurityConfiguration.java` — just set the env var (prod) or edit `application.
+  yaml` (dev/local).
+
+### Added
+
+- Correlation ids across the event/log chain: a new `CorrelationIdFilter` (`com.api.identity.
+  logging`, highest-precedence servlet filter) stamps every request with an id — reused from an
+  incoming `X-Correlation-Id` header when a gateway app already has one, generated fresh otherwise —
+  puts it in MDC (`logging.pattern.level` now includes `%X{correlationId}` so every log line for the
+  request carries it) and echoes it back as a response header. `CorrelationIdHolder.current()` reads
+  it from anywhere in the call stack; `MemberRemovedEvent`, `InvitationCreatedEvent`, and
+  `InvitationAcceptedEvent` all gained a `correlationId` field populated from it, so RabbitMQ
+  payloads can finally be traced back to the HTTP request that caused them. Backward-compatible for
+  existing consumers (api-movements, api-keep deserialize with Jackson's default
+  ignore-unknown-properties behavior). Follow-up not done here: the consumers don't yet read
+  `correlationId` back into their own MDC/logs, so cross-service tracing needs that other half too.
+
 ### Fixed
 
+- `WorkspaceService.leaveWorkspace` (the "leave workspace" endpoint) now deactivates the workspace
+  (`isActive = false`) when the leaving member was the last one. Previously the membership row was
+  deleted but the workspace itself lived on forever with no members and no owner — no way to find
+  or clean it up.
 - `WorkspaceInvitationService.acceptRejectInvitation` threw `LazyInitializationException` on
   `Workspace.name` when accepting an invitation: the method wasn't `@Transactional`, so by the time
   it read `invitation.getWorkspace().getName()` to build the `InvitationAcceptedEvent`, the session

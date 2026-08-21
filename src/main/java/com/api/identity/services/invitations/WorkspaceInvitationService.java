@@ -8,6 +8,7 @@ import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.RateLimitExceededException;
+import com.api.identity.logging.CorrelationIdHolder;
 import com.api.identity.mappers.WorkspaceInvitationMapper;
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
@@ -92,7 +93,8 @@ public class WorkspaceInvitationService {
                             workspaceToInvite.getName(),
                             user.getEmail(),
                             userInvited.getEmail(),
-                            workspaceInvitation.getCreatedAt()));
+                            workspaceInvitation.getCreatedAt(),
+                            CorrelationIdHolder.current()));
                 });
 
     }
@@ -120,7 +122,7 @@ public class WorkspaceInvitationService {
             workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
             invitationEventPublisher.publishInvitationAccepted(new InvitationAcceptedEvent(
                     invitation.getId(), invitation.getWorkspace().getId(), invitation.getWorkspace().getName(),
-                    user.getEmail(), LocalDateTime.now()));
+                    user.getEmail(), LocalDateTime.now(), CorrelationIdHolder.current()));
         }
         log.debug("Invitación {} actualizada correctamente a {}", invitationDTO.id(), invitation.getStatus());
     }

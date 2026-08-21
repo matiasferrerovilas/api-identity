@@ -15,6 +15,7 @@ import com.api.identity.events.MemberRemovedEvent
 import com.api.identity.services.audit.AuditLogService
 import com.api.identity.services.workspace.WorkspaceMembershipEventPublisher
 import com.api.identity.services.workspace.WorkspaceMembershipService
+import org.slf4j.MDC
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -27,6 +28,10 @@ class WorkspaceMembershipServiceTest extends Specification {
 
     WorkspaceMembershipService service = new WorkspaceMembershipService(
             workspaceMemberRepository, workspaceRepository, auditLogService, workspaceMembershipEventPublisher)
+
+    def cleanup() {
+        MDC.clear()
+    }
 
     def "verifyMembership - does not throw when the user belongs to the workspace"() {
         given:
@@ -215,6 +220,25 @@ class WorkspaceMembershipServiceTest extends Specification {
         0 * workspaceMemberRepository.save(_)
     }
 
+    def "removeMembership - stamps the published event with the request's correlation id"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).email("owner@example.com").build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+        def targetUser = User.builder().id(3L).email("target@example.com").build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(targetUser).role(WorkspaceRole.COLLABORATOR).build()
+        MDC.put("correlationId", "trace-456")
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.removeMembership(1L, actor, 3L)
+
+        then:
+        1 * workspaceMembershipEventPublisher.publishMemberRemoved({ MemberRemovedEvent e -> e.correlationId() == "trace-456" })
+    }
+
     def "removeMembership - a plain COLLABORATOR without ROLE_ADMIN cannot remove members"() {
         given:
         def workspace = Workspace.builder().id(1L).build()
@@ -285,5 +309,91 @@ class WorkspaceMembershipServiceTest extends Specification {
         then:
         1 * workspaceMemberRepository.delete(ownerMembership)
         1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == adminMembership && m.role == WorkspaceRole.OWNER })
+    }
+
+    def "transferOwnership - OWNER transfers to a COLLABORATOR, who becomes OWNER while the actor is demoted"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).email("owner@example.com").build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+        def newOwnerUser = User.builder().id(3L).email("newowner@example.com").build()
+        def newOwnerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(newOwnerUser).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(newOwnerMembership)
+
+        when:
+        service.transferOwnership(1L, actor, 3L)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == newOwnerMembership && m.role == WorkspaceRole.OWNER })
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == actorMembership && m.role == WorkspaceRole.COLLABORATOR })
+        1 * auditLogService.record(workspace, AuditAction.OWNERSHIP_TRANSFERRED, actor, newOwnerUser)
+    }
+
+    def "transferOwnership - a global admin who is not a member can transfer ownership without being demoted"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def newOwnerUser = User.builder().id(3L).build()
+        def newOwnerMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(newOwnerUser).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(newOwnerMembership)
+
+        when:
+        service.transferOwnership(1L, admin, 3L)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == newOwnerMembership && m.role == WorkspaceRole.OWNER })
+    }
+
+    def "transferOwnership - a plain COLLABORATOR without ROLE_ADMIN cannot transfer ownership"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.transferOwnership(1L, actor, 3L)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "transferOwnership - throws PermissionDeniedException when transferring to oneself"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.transferOwnership(1L, actor, 2L)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "transferOwnership - throws EntityNotFoundException when the new owner does not belong to the workspace"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.empty()
+
+        when:
+        service.transferOwnership(1L, actor, 3L)
+
+        then:
+        thrown(EntityNotFoundException)
+        0 * workspaceMemberRepository.save(_)
     }
 }

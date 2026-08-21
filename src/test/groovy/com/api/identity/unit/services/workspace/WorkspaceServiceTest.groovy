@@ -38,7 +38,7 @@ class WorkspaceServiceTest extends Specification {
     def owner = User.builder().id(1L).email("owner@example.com").build()
     def workspace = Workspace.builder().id(10L).name("Casa").build()
 
-    def "deleteWorkspace - removes the membership and records a MEMBER_LEFT audit entry"() {
+    def "leaveWorkspace - removes the membership and records a MEMBER_LEFT audit entry"() {
         given:
         def membership = WorkspaceMember.builder()
                 .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.COLLABORATOR).build()
@@ -49,7 +49,7 @@ class WorkspaceServiceTest extends Specification {
         workspaceMemberRepository.findByWorkspaceId(10L) >> [membership, other]
 
         when:
-        service.deleteWorkspace(10L)
+        service.leaveWorkspace(10L)
 
         then:
         1 * workspaceMemberRepository.delete(membership)
@@ -57,7 +57,7 @@ class WorkspaceServiceTest extends Specification {
         0 * workspaceRepository.save(_)
     }
 
-    def "deleteWorkspace - transfers ownership to another member before the owner leaves"() {
+    def "leaveWorkspace - transfers ownership to another member before the owner leaves"() {
         given:
         def membership = WorkspaceMember.builder()
                 .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.OWNER).build()
@@ -68,7 +68,7 @@ class WorkspaceServiceTest extends Specification {
         workspaceMemberRepository.findByWorkspaceId(10L) >> [membership, other]
 
         when:
-        service.deleteWorkspace(10L)
+        service.leaveWorkspace(10L)
 
         then:
         1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == other && m.role == WorkspaceRole.OWNER })
@@ -76,7 +76,7 @@ class WorkspaceServiceTest extends Specification {
         0 * workspaceRepository.save(_)
     }
 
-    def "deleteWorkspace - deactivates the workspace when the last member leaves"() {
+    def "leaveWorkspace - deactivates the workspace when the last member leaves"() {
         given:
         def membership = WorkspaceMember.builder()
                 .id(5L).workspace(workspace).user(owner).role(WorkspaceRole.OWNER).build()
@@ -85,7 +85,7 @@ class WorkspaceServiceTest extends Specification {
         workspaceMemberRepository.findByWorkspaceId(10L) >> [membership]
 
         when:
-        service.deleteWorkspace(10L)
+        service.leaveWorkspace(10L)
 
         then:
         1 * workspaceMemberRepository.delete(membership)
@@ -102,6 +102,17 @@ class WorkspaceServiceTest extends Specification {
 
         then:
         1 * workspaceMembershipService.removeMembership(10L, owner, 3L)
+    }
+
+    def "transferOwnership - delegates to WorkspaceMembershipService with the authenticated actor"() {
+        given:
+        userService.getAuthenticatedUser() >> owner
+
+        when:
+        service.transferOwnership(10L, 3L)
+
+        then:
+        1 * workspaceMembershipService.transferOwnership(10L, owner, 3L)
     }
 
     def "getWorkspaceAuditLog - verifies permission before returning the log"() {

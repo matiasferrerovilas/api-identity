@@ -20,6 +20,7 @@ import com.api.identity.services.ratelimit.RateLimiterService
 import com.api.identity.services.user.UserService
 import com.api.identity.services.workspace.WorkspaceMembershipService
 import com.api.identity.services.workspace.WorkspaceService
+import org.slf4j.MDC
 import spock.lang.Specification
 
 class WorkspaceInvitationServiceTest extends Specification {
@@ -52,6 +53,10 @@ class WorkspaceInvitationServiceTest extends Specification {
     def invited = User.builder().id(2L).email("invited@example.com").build()
     def workspace = Workspace.builder().id(10L).name("Casa").build()
 
+    def cleanup() {
+        MDC.clear()
+    }
+
     def "sendInvitation - requires the caller to be allowed to invite before creating anything"() {
         given:
         userService.getAuthenticatedUser() >> inviter
@@ -68,6 +73,23 @@ class WorkspaceInvitationServiceTest extends Specification {
         1 * workspaceMembershipService.verifyCanInvite(10L, 1L)
         1 * invitationEventPublisher.publishInvitationCreated({ it.invitedUserEmail() == "invited@example.com" })
         1 * auditLogService.record(workspace, AuditAction.INVITATION_SENT, inviter, invited)
+    }
+
+    def "sendInvitation - stamps the published event with the request's correlation id"() {
+        given:
+        MDC.put("correlationId", "trace-abc")
+        userService.getAuthenticatedUser() >> inviter
+        rateLimiterService.tryAcquire(_, _, _) >> true
+        workspaceService.findWorkspaceById(10L) >> workspace
+        userService.getUserByEmail(["invited@example.com"]) >> [invited]
+        workspaceInvitationRepository.findByWorkspaceIdAndStatusAndInvitedUserId(10L, InvitationStatus.PENDING, 2L) >> Optional.empty()
+        workspaceInvitationRepository.save(_ as WorkspaceInvitation) >> { WorkspaceInvitation wi -> wi }
+
+        when:
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+
+        then:
+        1 * invitationEventPublisher.publishInvitationCreated({ it.correlationId() == "trace-abc" })
     }
 
     def "sendInvitation - a READ_ONLY member is rejected before any invitation is created"() {
@@ -132,6 +154,22 @@ class WorkspaceInvitationServiceTest extends Specification {
         1 * workspaceInvitationRepository.save(invitation)
         1 * auditLogService.record(workspace, AuditAction.INVITATION_ACCEPTED, invited, null)
         1 * invitationEventPublisher.publishInvitationAccepted({ it.invitationId() == 5L && it.acceptedByEmail() == "invited@example.com" })
+    }
+
+    def "acceptRejectInvitation - stamps the published event with the request's correlation id"() {
+        given:
+        def invitation = WorkspaceInvitation.builder()
+                .id(5L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
+                .status(InvitationStatus.PENDING).build()
+        MDC.put("correlationId", "trace-xyz")
+        userService.getAuthenticatedUser() >> invited
+        workspaceInvitationRepository.findById(5L) >> Optional.of(invitation)
+
+        when:
+        service.acceptRejectInvitation(new AcceptRejectInvitationDTO(5L, true))
+
+        then:
+        1 * invitationEventPublisher.publishInvitationAccepted({ it.correlationId() == "trace-xyz" })
     }
 
     def "acceptRejectInvitation - rejecting does not add membership"() {

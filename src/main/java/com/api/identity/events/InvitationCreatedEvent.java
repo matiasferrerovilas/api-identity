@@ -13,5 +13,6 @@ public record InvitationCreatedEvent(
         String workspaceName,
         String invitedByEmail,
         String invitedUserEmail,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        String correlationId) {
 }
