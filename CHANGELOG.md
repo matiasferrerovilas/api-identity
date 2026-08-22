@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `GET /v1/users/lookup?email=` (`UserController`) — resolves an email to a user id, 404 if no
+  account matches. Wraps the existing `UserService.getUserByEmail(List<String>)` with a
+  single-email call. Built for api-keep's new user-to-user file sharing, which needs to validate a
+  share target *before* creating the grant (unlike `WorkspaceInvitationService.sendInvitation`,
+  which silently drops emails that don't match a registered user — this fails loudly instead, so
+  the caller can surface an honest "no account with that email" error).
+
 ### Security
 
 - `spring.rabbitmq.username`/`password` in `application-prod.yaml` were the only prod secret still

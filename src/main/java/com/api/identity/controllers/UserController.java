@@ -1,5 +1,6 @@
 package com.api.identity.controllers;
 
+import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.records.user.UserToAdd;
 import com.api.identity.records.user.UserTypeUpdateRequest;
@@ -74,6 +75,27 @@ public class UserController {
     @GetMapping
     public List<UserMe> getUsersByIds(@RequestParam List<Long> ids) {
         return userService.getUsersByIds(ids);
+    }
+
+    @Operation(
+            summary = "Buscar usuario por email",
+            description = "Usado por otros servicios (ej. api-keep, antes de crear un share de archivo con una "
+                    + "persona) para resolver un email a un id de usuario existente.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Usuario encontrado",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = UserLookupDTO.class)
+                            )
+                    ),
+                    @ApiResponse(responseCode = "404", description = "No existe ningún usuario con ese email")
+            }
+    )
+    @GetMapping("/lookup")
+    public UserLookupDTO lookupUserByEmail(@RequestParam String email) {
+        return userService.lookupUserByEmail(email);
     }
 
     @Operation(

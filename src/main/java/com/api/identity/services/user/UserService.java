@@ -6,6 +6,7 @@ import com.api.identity.enums.UserType;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.mappers.UserMapper;
+import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
@@ -100,5 +101,15 @@ public class UserService {
 
     public List<User> getUserByEmail(List<String> emails) {
         return userRepository.findByEmail(emails);
+    }
+
+    /** Used by other services (e.g. api-keep, before creating a user-to-user file share) to
+     * resolve an email to a user id — unlike {@link #getUserByEmail}, which silently drops
+     * unmatched emails for the invitation flow, this fails loudly so the caller can surface an
+     * honest "no account with that email" error instead of a share that silently goes nowhere. */
+    public UserLookupDTO lookupUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("No existe un usuario con email " + email));
+        return new UserLookupDTO(user.getId(), user.getEmail());
     }
 }
