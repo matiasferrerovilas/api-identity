@@ -50,20 +50,28 @@ public class UserAddService {
 
     @Transactional
     public UserMe createLogInUser(UserToAdd request, String api) {
-        var rateLimitKey = "rate-limit:user-creation:" + request.email();
+        Authentication authentication = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .filter(Authentication::isAuthenticated)
+                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+
+        // El email del JWT es la única fuente confiable de identidad acá — sin este chequeo,
+        // cualquier llamador autenticado podía mandar el email de otra persona en el body y
+        // colgar su onboarding (y su rate limit) de una cuenta ajena.
+        String authenticatedEmail = authentication.getName();
+        if (authenticatedEmail == null || !authenticatedEmail.equalsIgnoreCase(request.email())) {
+            throw new PermissionDeniedException("El email no coincide con el de la cuenta autenticada");
+        }
+
+        var rateLimitKey = "rate-limit:user-creation:" + authenticatedEmail;
         if (!rateLimiterService.tryAcquire(rateLimitKey, MAX_USER_CREATIONS_PER_HOUR, RATE_LIMIT_WINDOW)) {
             throw new RateLimitExceededException("Demasiados intentos. Probá de nuevo más tarde.");
         }
 
-        List<String> roles = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getAuthorities)
-                .map(authorities -> authorities.stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .filter(Objects::nonNull)
-                        .filter(authority -> authority.startsWith("ROLE_"))
-                        .toList())
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        List<String> roles = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .filter(authority -> authority.startsWith("ROLE_"))
+                .toList();
 
         Set<UserRole> userRoles = roles.stream()
                 .map(UserRole::parse)

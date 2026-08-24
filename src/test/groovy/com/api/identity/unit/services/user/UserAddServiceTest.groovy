@@ -104,6 +104,38 @@ class UserAddServiceTest extends Specification {
         thrown(PermissionDeniedException)
     }
 
+    def "createLogInUser - throws PermissionDeniedException when the request email doesn't match the authenticated user's"() {
+        given:
+        authenticateAs("someone-else@example.com", "ROLE_FAMILY")
+
+        when:
+        service.createLogInUser(request, "api-keep")
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * rateLimiterService.tryAcquire(_, _, _)
+        0 * userRepository.save(_)
+        0 * onboardingDoneRepository.save(_)
+    }
+
+    def "createLogInUser - accepts a request email that only differs in case from the authenticated user's"() {
+        given:
+        authenticateAs("New@Example.com", "ROLE_FAMILY")
+        rateLimiterService.tryAcquire(_, _, _) >> true
+        userRepository.findByEmail("new@example.com") >> Optional.empty()
+        onboardingDoneRepository.findByUserEmailAndApiName("new@example.com", "api-keep") >> Optional.empty()
+        apiService.getOrCreate("api-keep") >> Api.builder().id(1L).name("api-keep").build()
+        userMapper.toUserMe(_ as User, false, false, ["ROLE_FAMILY"]) >> UserMe.builder().email("new@example.com").build()
+
+        when:
+        service.createLogInUser(request, "api-keep")
+
+        then:
+        1 * userRepository.save(_ as User) >> { User u -> u }
+        1 * onboardingDoneRepository.save(_ as OnboardingDone) >>
+                OnboardingDone.builder().id(1L).isFirstLogin(false).hasSeenTour(false).build()
+    }
+
     def "createLogInUser - throws RateLimitExceededException and touches nothing when the limiter rejects"() {
         given:
         // Sin stub para tryAcquire: un Mock sin interacción declarada devuelve `false` para un

@@ -3,13 +3,16 @@ package com.api.identity.services.user;
 import com.api.identity.entities.OnboardingDone;
 import com.api.identity.entities.User;
 import com.api.identity.enums.UserType;
+import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.PermissionDeniedException;
+import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.mappers.UserMapper;
 import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.services.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -18,6 +21,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -26,9 +30,18 @@ import java.util.Optional;
 @Slf4j
 @RequiredArgsConstructor
 public class UserService {
+
+    // Ambos endpoints resuelven identidad de cualquier usuario/id sin requerir que el caller
+    // comparta workspace con el objetivo — sin este límite, una cuenta autenticada podía probar
+    // emails/ids arbitrarios sin fricción y enumerar quién tiene cuenta en toda la suite.
+    private static final int MAX_LOOKUPS_PER_HOUR = 30;
+    private static final Duration LOOKUP_RATE_LIMIT_WINDOW = Duration.ofHours(1);
+    private static final int MAX_IDS_PER_REQUEST = 100;
+
     private final UserRepository userRepository;
     private final OnboardingDoneRepository onboardingDoneRepository;
     private final UserMapper userMapper;
+    private final RateLimiterService rateLimiterService;
 
     @Transactional(readOnly = true)
     public User getAuthenticatedUser() {
@@ -83,6 +96,10 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserMe> getUsersByIds(List<Long> ids) {
+        if (ids.size() > MAX_IDS_PER_REQUEST) {
+            throw new BusinessException("No se pueden pedir más de " + MAX_IDS_PER_REQUEST + " ids por llamada");
+        }
+        this.enforceLookupRateLimit();
         return userMapper.toUserMe(userRepository.findAllById(ids));
     }
 
@@ -108,8 +125,22 @@ public class UserService {
      * unmatched emails for the invitation flow, this fails loudly so the caller can surface an
      * honest "no account with that email" error instead of a share that silently goes nowhere. */
     public UserLookupDTO lookupUserByEmail(String email) {
+        this.enforceLookupRateLimit();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("No existe un usuario con email " + email));
         return new UserLookupDTO(user.getId(), user.getEmail());
+    }
+
+    private void enforceLookupRateLimit() {
+        String callerEmail = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+                .filter(Authentication::isAuthenticated)
+                .map(Authentication::getName)
+                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+
+        boolean acquired = rateLimiterService.tryAcquire(
+                "rate-limit:user-lookup:" + callerEmail, MAX_LOOKUPS_PER_HOUR, LOOKUP_RATE_LIMIT_WINDOW);
+        if (!acquired) {
+            throw new RateLimitExceededException("Demasiadas consultas. Probá de nuevo más tarde.");
+        }
     }
 }

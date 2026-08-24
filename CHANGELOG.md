@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- `GET /v1/users/lookup?email=` and `GET /v1/users?ids=` had no rate limit and no requirement to
+  share a workspace with the target — any authenticated user of any app in the suite could probe
+  arbitrary emails/ids and learn who has an account, a real account-enumeration surface. Now
+  rate-limited to 30 lookups/hour per caller (`UserService.enforceLookupRateLimit`, same
+  `RateLimiterService` used by invitations/user-creation), and `getUsersByIds` additionally rejects
+  a single call requesting more than 100 ids (`BusinessException`).
+- `WorkspaceSendInvitationDTO.emails` had no validation annotations — the invitation rate limit
+  counts "batches" (10/hour), so a single call with thousands of emails bypassed the abuse
+  protection entirely. Now `@NotEmpty @Size(max = 20)` on the list and `@Email` per element.
+- `UserAddService.createLogInUser` (`POST /v1/users`, and transitively `POST /v1/onboarding/start`)
+  keyed the created/reused `User` — and the user-creation rate limit — off the `email` field in the
+  request body, without ever checking it against the authenticated JWT's own `email` claim. Any
+  authenticated caller could send an arbitrary email and attach their onboarding to someone else's
+  existing account, and the rate limit was trivially bypassable the same way (a different email per
+  call). Now the request email must match `Authentication.getName()` (case-insensitively) or the
+  call is rejected with `PermissionDeniedException`; the rate-limit key is keyed off the
+  authenticated email instead of the body field.
 - `spring.rabbitmq.username`/`password` in `application-prod.yaml` were the only prod secret still
   hardcoded in plain text (`api-identity`/`api-identity`) while `DB_USERNAME`/`DB_PASSWORD`/
   `REDIS_PASSWORD`/`CORS_ALLOWED_ORIGINS` in the same file were already env vars — now
