@@ -133,7 +133,8 @@ class WorkspaceMembershipServiceTest extends Specification {
         thrown(EntityNotFoundException)
     }
 
-    def "addMembership - saves a new COLLABORATOR membership and records a MEMBER_JOINED audit entry"() {
+    @Unroll
+    def "addMembership - saves a new membership with the given role #role and records a MEMBER_JOINED audit entry"() {
         given:
         def user = User.builder().id(2L).email("a@b.com").build()
         def workspace = Workspace.builder().id(1L).build()
@@ -141,11 +142,14 @@ class WorkspaceMembershipServiceTest extends Specification {
         workspaceRepository.findById(1L) >> Optional.of(workspace)
 
         when:
-        service.addMembership(1L, user)
+        service.addMembership(1L, user, role)
 
         then:
-        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m.role == WorkspaceRole.COLLABORATOR && m.user == user })
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m.role == role && m.user == user })
         1 * auditLogService.record(workspace, AuditAction.MEMBER_JOINED, user, null)
+
+        where:
+        role << [WorkspaceRole.COLLABORATOR, WorkspaceRole.READ_ONLY]
     }
 
     def "addMembership - throws EntityAlreadyExistsException when already a member"() {
@@ -154,7 +158,7 @@ class WorkspaceMembershipServiceTest extends Specification {
         workspaceMemberRepository.existsByWorkspaceIdAndUserId(1L, 2L) >> true
 
         when:
-        service.addMembership(1L, user)
+        service.addMembership(1L, user, WorkspaceRole.COLLABORATOR)
 
         then:
         thrown(EntityAlreadyExistsException)
@@ -167,7 +171,7 @@ class WorkspaceMembershipServiceTest extends Specification {
         workspaceRepository.findById(1L) >> Optional.empty()
 
         when:
-        service.addMembership(1L, user)
+        service.addMembership(1L, user, WorkspaceRole.COLLABORATOR)
 
         then:
         thrown(EntityNotFoundException)

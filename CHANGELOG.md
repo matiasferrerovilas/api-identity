@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-31
+
+### Added
+- `WorkspaceSendInvitationDTO` now takes a required `role` (`COLLABORATOR` or `READ_ONLY` —
+  `OWNER` is rejected with a `BusinessException`, that's `transferOwnership`'s job). The chosen
+  role is stored on the `WorkspaceInvitation` and applied verbatim by
+  `WorkspaceMembershipService.addMembership` when the invitation is accepted, instead of the
+  hardcoded `COLLABORATOR` from before. Closes the roadmap gap where `READ_ONLY` was checked
+  everywhere (`requireAtLeastCollaborator`) but unreachable — there was no path to actually
+  become a `READ_ONLY` member. `WorkspaceInvitationDTO`/`WorkspaceSentInvitationDTO` and the
+  `InvitationCreatedEvent` RabbitMQ payload also now carry `role`, so both gateway apps' live
+  invitation notifications stay in sync without a refetch.
+- New migration `009__add_role_to_workspace_invitations.sql` — `workspace_invitations.role`,
+  `NOT NULL DEFAULT 'COLLABORATOR'` (matches the old hardcoded behavior for any row that predates
+  this column).
+
+## [1.5.0] - 2026-08-31
+
+### Added
+- `GET /v1/users/me?workspaceId=` — when given, the response now includes
+  `metadata.workspaceRole`, the caller's role in that specific workspace (null if not a member).
+  api-identity has no notion of "the" active workspace itself (that's app-specific state each
+  caller owns), so the caller decides which workspace's role it wants, if any.
+
+### Changed
+- `WorkspaceMemberDTO.Metadata` dropped `members: string[]` — it was fully redundant with
+  `memberDetails` (which already has email plus userId/role, everything `members` had and more).
+  Every consumer already had `memberDetails` available.
+
 ## [1.4.1] - 2026-08-30
 
 ### Added

@@ -2,6 +2,7 @@ package com.api.identity.services.user;
 
 import com.api.identity.entities.OnboardingDone;
 import com.api.identity.entities.User;
+import com.api.identity.entities.WorkspaceMember;
 import com.api.identity.enums.UserType;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
@@ -11,6 +12,7 @@ import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.repositories.WorkspaceMemberRepository;
 import com.api.identity.security.SecurityUtils;
 import com.api.identity.services.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final OnboardingDoneRepository onboardingDoneRepository;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserMapper userMapper;
     private final RateLimiterService rateLimiterService;
 
@@ -47,6 +50,19 @@ public class UserService {
     }
 
     public UserMe getMe(String api) {
+        return getMe(api, null);
+    }
+
+    /**
+     * @param workspaceId when given, resolves and includes the caller's role in that specific
+     *                    workspace ({@link UserMe#workspaceRole()}) — null if the caller isn't a
+     *                    member of it. Optional because {@code /v1/users/me} is meaningful with no
+     *                    workspace context too (e.g. right after login, before any workspace is
+     *                    "active"); api-identity has no notion of "the" active workspace itself
+     *                    (that's app-specific state each caller owns), so the caller decides which
+     *                    workspace's role it wants, if any.
+     */
+    public UserMe getMe(String api, Long workspaceId) {
         String email = SecurityUtils.currentEmail();
         List<String> roles = SecurityUtils.currentRoles();
 
@@ -65,13 +81,26 @@ public class UserService {
                     .build();
         }
 
+        var user = optionalUser.get();
         var onboarding = onboardingDoneRepository.findByUserEmailAndApiName(email, api);
 
-        return userMapper.toUserMe(
-                optionalUser.get(),
+        UserMe userMe = userMapper.toUserMe(
+                user,
                 onboarding.map(OnboardingDone::isFirstLogin).orElse(true),
                 onboarding.map(OnboardingDone::isHasSeenTour).orElse(false),
                 roles);
+
+        if (workspaceId == null) {
+            return userMe;
+        }
+
+        var workspaceRole = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, user.getId())
+                .map(WorkspaceMember::getRole)
+                .orElse(null);
+
+        return userMe.toBuilder()
+                .metadata(userMe.metadata().toBuilder().workspaceRole(workspaceRole).build())
+                .build();
     }
 
     @Transactional(readOnly = true)

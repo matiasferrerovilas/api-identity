@@ -31,7 +31,6 @@ public class WorkspaceMemberMapper {
                 workspace.getId(),
                 workspace.getName(),
                 new WorkspaceMemberDTO.Metadata(
-                        members.stream().map(m -> m.getUser().getEmail()).toList(),
                         members.stream()
                                 .map(m -> new WorkspaceMemberDTO.MemberDetail(
                                         m.getUser().getId(), m.getUser().getEmail(), m.getRole()))

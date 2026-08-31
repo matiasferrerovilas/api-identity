@@ -1,5 +1,7 @@
 package com.api.identity.events;
 
+import com.api.identity.enums.WorkspaceRole;
+
 import java.time.LocalDateTime;
 
 /**
@@ -13,6 +15,7 @@ public record InvitationCreatedEvent(
         String workspaceName,
         String invitedByEmail,
         String invitedUserEmail,
+        WorkspaceRole role,
         LocalDateTime createdAt,
         String correlationId) {
 }

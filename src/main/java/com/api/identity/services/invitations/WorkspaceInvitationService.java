@@ -3,6 +3,7 @@ package com.api.identity.services.invitations;
 import com.api.identity.entities.WorkspaceInvitation;
 import com.api.identity.enums.AuditAction;
 import com.api.identity.enums.InvitationStatus;
+import com.api.identity.enums.WorkspaceRole;
 import com.api.identity.events.InvitationAcceptedEvent;
 import com.api.identity.events.InvitationCreatedEvent;
 import com.api.identity.exceptions.BusinessException;
@@ -60,6 +61,10 @@ public class WorkspaceInvitationService {
     public void sendInvitation(Long workspaceId, @Valid WorkspaceSendInvitationDTO body) {
         var user = userService.getAuthenticatedUser();
 
+        if (body.role() == WorkspaceRole.OWNER) {
+            throw new BusinessException("No se puede invitar directamente como OWNER");
+        }
+
         var rateLimitKey = "rate-limit:invitations:" + user.getId();
         if (!rateLimiterService.tryAcquire(rateLimitKey, MAX_INVITATION_BATCHES_PER_HOUR, RATE_LIMIT_WINDOW)) {
             throw new RateLimitExceededException(
@@ -86,6 +91,7 @@ public class WorkspaceInvitationService {
                             .invitedUser(userInvited)
                             .status(InvitationStatus.PENDING)
                             .workspace(workspaceToInvite)
+                            .role(body.role())
                             .build());
                     auditLogService.record(workspaceToInvite, AuditAction.INVITATION_SENT, user, userInvited);
                     invitationEventPublisher.publishInvitationCreated(new InvitationCreatedEvent(
@@ -94,6 +100,7 @@ public class WorkspaceInvitationService {
                             workspaceToInvite.getName(),
                             user.getEmail(),
                             userInvited.getEmail(),
+                            workspaceInvitation.getRole(),
                             workspaceInvitation.getCreatedAt(),
                             CorrelationIdHolder.current()));
                 });
@@ -149,7 +156,7 @@ public class WorkspaceInvitationService {
                 invitationDTO.status() ? AuditAction.INVITATION_ACCEPTED : AuditAction.INVITATION_REJECTED,
                 user, null);
         if (invitationDTO.status()) {
-            workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user);
+            workspaceMembershipService.addMembership(invitation.getWorkspace().getId(), user, invitation.getRole());
             invitationEventPublisher.publishInvitationAccepted(new InvitationAcceptedEvent(
                     invitation.getId(), invitation.getWorkspace().getId(), invitation.getWorkspace().getName(),
                     user.getEmail(), LocalDateTime.now(), CorrelationIdHolder.current()));

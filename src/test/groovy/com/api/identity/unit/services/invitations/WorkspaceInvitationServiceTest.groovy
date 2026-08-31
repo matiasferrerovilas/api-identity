@@ -5,6 +5,7 @@ import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceInvitation
 import com.api.identity.enums.AuditAction
 import com.api.identity.enums.InvitationStatus
+import com.api.identity.enums.WorkspaceRole
 import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.exceptions.PermissionDeniedException
@@ -23,6 +24,7 @@ import com.api.identity.services.workspace.WorkspaceMembershipService
 import com.api.identity.services.workspace.WorkspaceService
 import org.slf4j.MDC
 import spock.lang.Specification
+import spock.lang.Unroll
 
 class WorkspaceInvitationServiceTest extends Specification {
 
@@ -68,12 +70,31 @@ class WorkspaceInvitationServiceTest extends Specification {
         workspaceInvitationRepository.save(_ as WorkspaceInvitation) >> { WorkspaceInvitation wi -> wi }
 
         when:
-        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
         1 * workspaceMembershipService.verifyCanInvite(10L, 1L)
         1 * invitationEventPublisher.publishInvitationCreated({ it.invitedUserEmail() == "invited@example.com" })
         1 * auditLogService.record(workspace, AuditAction.INVITATION_SENT, inviter, invited)
+    }
+
+    @Unroll
+    def "sendInvitation - persists the invitation with the requested role #role"() {
+        given:
+        userService.getAuthenticatedUser() >> inviter
+        rateLimiterService.tryAcquire(_, _, _) >> true
+        workspaceService.findWorkspaceById(10L) >> workspace
+        userService.getUserByEmail(["invited@example.com"]) >> [invited]
+        workspaceInvitationRepository.findByWorkspaceIdAndStatusAndInvitedUserId(10L, InvitationStatus.PENDING, 2L) >> Optional.empty()
+
+        when:
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], role))
+
+        then:
+        1 * workspaceInvitationRepository.save({ WorkspaceInvitation wi -> wi.role == role }) >> { WorkspaceInvitation wi -> wi }
+
+        where:
+        role << [WorkspaceRole.COLLABORATOR, WorkspaceRole.READ_ONLY]
     }
 
     def "sendInvitation - stamps the published event with the request's correlation id"() {
@@ -87,7 +108,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         workspaceInvitationRepository.save(_ as WorkspaceInvitation) >> { WorkspaceInvitation wi -> wi }
 
         when:
-        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
         1 * invitationEventPublisher.publishInvitationCreated({ it.correlationId() == "trace-abc" })
@@ -100,10 +121,20 @@ class WorkspaceInvitationServiceTest extends Specification {
         workspaceMembershipService.verifyCanInvite(10L, 1L) >> { throw new PermissionDeniedException("Los miembros de solo lectura no pueden invitar a otros usuarios") }
 
         when:
-        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
         thrown(PermissionDeniedException)
+        0 * workspaceInvitationRepository.save(_)
+    }
+
+    def "sendInvitation - throws BusinessException and creates nothing when the role is OWNER"() {
+        when:
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.OWNER))
+
+        then:
+        thrown(BusinessException)
+        0 * workspaceMembershipService.verifyCanInvite(_, _)
         0 * workspaceInvitationRepository.save(_)
     }
 
@@ -114,7 +145,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         // método que retorna boolean, que es justo el escenario "límite excedido" que queremos.
 
         when:
-        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
         thrown(RateLimitExceededException)
@@ -132,17 +163,18 @@ class WorkspaceInvitationServiceTest extends Specification {
                 Optional.of(WorkspaceInvitation.builder().id(99L).build())
 
         when:
-        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"]))
+        service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
         0 * workspaceInvitationRepository.save(_)
     }
 
-    def "acceptRejectInvitation - accepting adds membership and marks the invitation ACCEPTED"() {
+    @Unroll
+    def "acceptRejectInvitation - accepting adds membership with the invitation's role #role and marks it ACCEPTED"() {
         given:
         def invitation = WorkspaceInvitation.builder()
                 .id(5L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
-                .status(InvitationStatus.PENDING).build()
+                .status(InvitationStatus.PENDING).role(role).build()
         userService.getAuthenticatedUser() >> invited
         workspaceInvitationRepository.findById(5L) >> Optional.of(invitation)
 
@@ -151,10 +183,13 @@ class WorkspaceInvitationServiceTest extends Specification {
 
         then:
         invitation.status == InvitationStatus.ACCEPTED
-        1 * workspaceMembershipService.addMembership(10L, invited)
+        1 * workspaceMembershipService.addMembership(10L, invited, role)
         1 * workspaceInvitationRepository.save(invitation)
         1 * auditLogService.record(workspace, AuditAction.INVITATION_ACCEPTED, invited, null)
         1 * invitationEventPublisher.publishInvitationAccepted({ it.invitationId() == 5L && it.acceptedByEmail() == "invited@example.com" })
+
+        where:
+        role << [WorkspaceRole.COLLABORATOR, WorkspaceRole.READ_ONLY]
     }
 
     def "acceptRejectInvitation - stamps the published event with the request's correlation id"() {
@@ -226,7 +261,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         given:
         def sent = [WorkspaceInvitation.builder().id(7L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
                 .status(InvitationStatus.PENDING).build()]
-        def dto = new WorkspaceSentInvitationDTO(7L, 10L, "Casa", "invited@example.com", InvitationStatus.PENDING, null)
+        def dto = new WorkspaceSentInvitationDTO(7L, 10L, "Casa", "invited@example.com", InvitationStatus.PENDING, WorkspaceRole.COLLABORATOR, null)
         userService.getAuthenticatedUser() >> inviter
         workspaceInvitationRepository.findByInvitedByIdOrderByCreatedAtDesc(1L) >> sent
         workspaceInvitationMapper.toSentDTO(sent) >> [dto]

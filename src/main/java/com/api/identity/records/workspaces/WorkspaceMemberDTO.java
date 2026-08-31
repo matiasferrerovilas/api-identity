@@ -13,16 +13,16 @@ public record WorkspaceMemberDTO(
         Metadata metadata) implements Serializable {
 
     public record Metadata(
-            List<String> members,
             List<MemberDetail> memberDetails,
             WorkspaceRole role,
             LocalDateTime joinedAt) implements Serializable {
     }
 
     /**
-     * Detalle por miembro (id de usuario, email, rol) — {@code members} solo trae emails por
-     * compatibilidad con consumidores existentes; esto es lo que un cliente necesita para, por
-     * ejemplo, ofrecer "eliminar a este miembro" (que requiere el userId, no el email).
+     * Detalle por miembro (id de usuario, email, rol) — antes había también un {@code members:
+     * string[]} con solo los emails, redundante con esto (un cliente puede derivarlo con
+     * {@code memberDetails.map(m => m.email)}) y sin lo que hace falta para, por ejemplo, ofrecer
+     * "eliminar a este miembro" (que requiere el userId, no el email). Se sacó el campo duplicado.
      */
     public record MemberDetail(Long userId, String email, WorkspaceRole role) implements Serializable {
     }

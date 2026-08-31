@@ -16,7 +16,7 @@ plugins {
 }
 
 group = 'com.api.identity'
-version = '1.4.1'
+version = '1.6.0'
 
 java {
 	sourceCompatibility = '25'

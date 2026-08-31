@@ -59,7 +59,10 @@ public class WorkspaceMembershipService {
         }
     }
 
-    public void addMembership(Long workspaceId, User user) {
+    /** El rol viene de la invitación que el usuario aceptó (ver WorkspaceInvitationService) — quien
+     * invita elige si el nuevo miembro entra como COLLABORATOR o READ_ONLY. OWNER nunca llega
+     * acá: no se puede invitar directamente como OWNER, solo transferOwnership lo asigna. */
+    public void addMembership(Long workspaceId, User user, WorkspaceRole role) {
         if (workspaceMemberRepository.existsByWorkspaceIdAndUserId(workspaceId, user.getId())) {
             throw new EntityAlreadyExistsException("El usuario ya pertenece al workspace indicado");
         }
@@ -68,10 +71,10 @@ public class WorkspaceMembershipService {
                 .workspace(workspace)
                         .joinedAt(LocalDateTime.now())
                         .user(user)
-                        .role(WorkspaceRole.COLLABORATOR)
+                        .role(role)
                 .build());
         auditLogService.record(workspace, AuditAction.MEMBER_JOINED, user, null);
-        log.debug("Se agrego el usuario {} al workspace {}", user.getEmail(), workspaceId);
+        log.debug("Se agrego el usuario {} al workspace {} con rol {}", user.getEmail(), workspaceId, role);
     }
 
     public void removeMembership(Long workspaceId, User actor, Long targetUserId) {

@@ -1,6 +1,7 @@
 package com.api.identity.entities;
 
 import com.api.identity.enums.InvitationStatus;
+import com.api.identity.enums.WorkspaceRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -55,6 +56,13 @@ public class WorkspaceInvitation {
     @Column(nullable = false)
     @Builder.Default
     private InvitationStatus status = InvitationStatus.PENDING;
+
+    // Rol con el que el invitado se une si acepta — lo elige quien invita (ver
+    // WorkspaceSendInvitationDTO), nunca OWNER. WorkspaceMembershipService.addMembership lo aplica
+    // tal cual al aceptar, en vez de hardcodear COLLABORATOR como antes.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private WorkspaceRole role;
 
     @CreationTimestamp
     @Column(name = "created_at")

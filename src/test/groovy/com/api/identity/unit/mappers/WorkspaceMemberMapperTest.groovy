@@ -29,7 +29,6 @@ class WorkspaceMemberMapperTest extends Specification {
         then:
         result.size() == 1
         def dto = result[0]
-        dto.metadata().members() == ["owner@example.com", "collab@example.com"]
         dto.metadata().memberDetails().size() == 2
         dto.metadata().memberDetails()[0] == new com.api.identity.records.workspaces.WorkspaceMemberDTO.MemberDetail(10L, "owner@example.com", WorkspaceRole.OWNER)
         dto.metadata().memberDetails()[1] == new com.api.identity.records.workspaces.WorkspaceMemberDTO.MemberDetail(11L, "collab@example.com", WorkspaceRole.COLLABORATOR)

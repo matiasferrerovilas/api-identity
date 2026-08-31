@@ -40,7 +40,10 @@ public class UserController {
     @Operation(
             summary = "Obtener datos del usuario autenticado",
             description = "Retorna el ID interno, email, estado de onboarding y tipo de usuario del usuario autenticado. "
-                    + "Si el usuario no existe aún en la base de datos, retorna isFirstLogin=true con los demás campos en null.",
+                    + "Si el usuario no existe aún en la base de datos, retorna isFirstLogin=true con los demás campos en null. "
+                    + "Si se pasa workspaceId, además incluye el rol del usuario en ese workspace puntual "
+                    + "(null si no es miembro) — api-identity no tiene noción propia de \"workspace activo\", "
+                    + "así que es el caller quien decide para cuál workspace pedir el rol, si corresponde.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
@@ -53,8 +56,8 @@ public class UserController {
             }
     )
     @GetMapping("/me")
-    public UserMe getMe(@AuthenticationPrincipal Jwt jwt) {
-        return userService.getMe(sourceServiceResolver.resolve(jwt));
+    public UserMe getMe(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) Long workspaceId) {
+        return userService.getMe(sourceServiceResolver.resolve(jwt), workspaceId);
     }
 
     @Operation(

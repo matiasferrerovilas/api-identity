@@ -1,6 +1,9 @@
 package com.api.identity.unit.services.user
 
 import com.api.identity.entities.User
+import com.api.identity.entities.Workspace
+import com.api.identity.entities.WorkspaceMember
+import com.api.identity.enums.WorkspaceRole
 import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.exceptions.PermissionDeniedException
@@ -9,6 +12,7 @@ import com.api.identity.mappers.UserMapper
 import com.api.identity.records.user.UserMe
 import com.api.identity.repositories.OnboardingDoneRepository
 import com.api.identity.repositories.UserRepository
+import com.api.identity.repositories.WorkspaceMemberRepository
 import com.api.identity.services.ratelimit.RateLimiterService
 import com.api.identity.services.user.UserService
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -23,10 +27,12 @@ class UserServiceTest extends Specification {
 
     UserRepository userRepository = Mock(UserRepository)
     OnboardingDoneRepository onboardingDoneRepository = Mock(OnboardingDoneRepository)
+    WorkspaceMemberRepository workspaceMemberRepository = Mock(WorkspaceMemberRepository)
     UserMapper userMapper = Mock(UserMapper)
     RateLimiterService rateLimiterService = Mock(RateLimiterService)
 
-    UserService service = new UserService(userRepository, onboardingDoneRepository, userMapper, rateLimiterService)
+    UserService service = new UserService(
+            userRepository, onboardingDoneRepository, workspaceMemberRepository, userMapper, rateLimiterService)
 
     def setup() {
         authenticateAs("caller@example.com")
@@ -122,6 +128,59 @@ class UserServiceTest extends Specification {
         then:
         thrown(RateLimitExceededException)
         0 * userRepository.findAllById(_)
+    }
+
+    def "getMe - includes the caller's role in the given workspace"() {
+        given:
+        def user = User.builder().id(1L).email("caller@example.com").build()
+        def workspace = Workspace.builder().id(5L).name("Casa").build()
+        def membership = WorkspaceMember.builder().id(50L).workspace(workspace).user(user).role(WorkspaceRole.COLLABORATOR).build()
+        userRepository.findByEmail("caller@example.com") >> Optional.of(user)
+        onboardingDoneRepository.findByUserEmailAndApiName("caller@example.com", "api-movements") >> Optional.empty()
+        userMapper.toUserMe(user, true, false, ["ROLE_FAMILY"]) >> UserMe.builder().id(1L).email("caller@example.com")
+                .metadata(UserMe.Metadata.builder().isFirstLogin(true).hasSeenTour(false).userRole(["ROLE_FAMILY"]).build())
+                .build()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(5L, 1L) >> Optional.of(membership)
+
+        when:
+        def result = service.getMe("api-movements", 5L)
+
+        then:
+        result.metadata().workspaceRole() == WorkspaceRole.COLLABORATOR
+    }
+
+    def "getMe - workspaceRole is null when the caller is not a member of the given workspace"() {
+        given:
+        def user = User.builder().id(1L).email("caller@example.com").build()
+        userRepository.findByEmail("caller@example.com") >> Optional.of(user)
+        onboardingDoneRepository.findByUserEmailAndApiName("caller@example.com", "api-movements") >> Optional.empty()
+        userMapper.toUserMe(user, true, false, ["ROLE_FAMILY"]) >> UserMe.builder().id(1L).email("caller@example.com")
+                .metadata(UserMe.Metadata.builder().isFirstLogin(true).hasSeenTour(false).userRole(["ROLE_FAMILY"]).build())
+                .build()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(99L, 1L) >> Optional.empty()
+
+        when:
+        def result = service.getMe("api-movements", 99L)
+
+        then:
+        result.metadata().workspaceRole() == null
+    }
+
+    def "getMe - does not look up any membership when no workspaceId is given"() {
+        given:
+        def user = User.builder().id(1L).email("caller@example.com").build()
+        userRepository.findByEmail("caller@example.com") >> Optional.of(user)
+        onboardingDoneRepository.findByUserEmailAndApiName("caller@example.com", "api-movements") >> Optional.empty()
+        userMapper.toUserMe(user, true, false, ["ROLE_FAMILY"]) >> UserMe.builder().id(1L).email("caller@example.com")
+                .metadata(UserMe.Metadata.builder().isFirstLogin(true).hasSeenTour(false).userRole(["ROLE_FAMILY"]).build())
+                .build()
+
+        when:
+        def result = service.getMe("api-movements")
+
+        then:
+        result.metadata().workspaceRole() == null
+        0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
     }
 
     private static void authenticateAs(String email) {
