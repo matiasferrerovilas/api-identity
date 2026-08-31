@@ -16,4 +16,6 @@ public interface WorkspaceInvitationRepository extends JpaRepository<WorkspaceIn
     Optional<WorkspaceInvitation> findByWorkspaceIdAndStatusAndInvitedUserId(
             Long workspaceId, InvitationStatus status, Long invitedUserId);
 
+    List<WorkspaceInvitation> findByInvitedByIdOrderByCreatedAtDesc(Long invitedById);
+
 }

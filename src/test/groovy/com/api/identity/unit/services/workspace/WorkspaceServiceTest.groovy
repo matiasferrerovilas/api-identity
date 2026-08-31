@@ -5,9 +5,11 @@ import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceMember
 import com.api.identity.enums.AuditAction
 import com.api.identity.enums.WorkspaceRole
+import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.mappers.WorkspaceMapper
 import com.api.identity.mappers.WorkspaceMemberMapper
 import com.api.identity.records.audit.AuditLogDTO
+import com.api.identity.records.workspaces.WorkspaceDTO
 import com.api.identity.repositories.WorkspaceMemberRepository
 import com.api.identity.repositories.WorkspaceRepository
 import com.api.identity.services.audit.AuditLogService
@@ -128,5 +130,35 @@ class WorkspaceServiceTest extends Specification {
         then:
         1 * workspaceMembershipService.verifyCanViewAuditLog(10L, 1L)
         result.size() == 1
+    }
+
+    def "getWorkspaceDTOById - verifies membership before returning the workspace"() {
+        given:
+        def dto = new WorkspaceDTO(10L, "Casa", "owner@example.com", new WorkspaceDTO.Metadata(["owner@example.com"]))
+        userService.getAuthenticatedUser() >> owner
+        workspaceRepository.findById(10L) >> Optional.of(workspace)
+        workspaceMapper.toDTO(workspace) >> dto
+
+        when:
+        def result = service.getWorkspaceDTOById(10L)
+
+        then:
+        1 * workspaceMembershipService.verifyMembership(10L, 1L)
+        result == dto
+    }
+
+    def "getWorkspaceDTOById - throws EntityNotFoundException when the user is not a member (IDOR fix)"() {
+        given:
+        userService.getAuthenticatedUser() >> owner
+        workspaceMembershipService.verifyMembership(10L, 1L) >> {
+            throw new EntityNotFoundException("El usuario no pertenece al workspace indicado")
+        }
+
+        when:
+        service.getWorkspaceDTOById(10L)
+
+        then:
+        thrown(EntityNotFoundException)
+        0 * workspaceRepository.findById(_)
     }
 }

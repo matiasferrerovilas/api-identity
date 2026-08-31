@@ -5,26 +5,21 @@ import com.api.identity.entities.User;
 import com.api.identity.enums.UserType;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
-import com.api.identity.exceptions.PermissionDeniedException;
 import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.mappers.UserMapper;
 import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.security.SecurityUtils;
 import com.api.identity.services.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 
 @Service
 @Slf4j
@@ -45,30 +40,15 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public User getAuthenticatedUser() {
-        String email = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        String email = SecurityUtils.currentEmail();
 
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new EntityNotFoundException("Usuario inexistente"));
     }
 
     public UserMe getMe(String api) {
-        String email = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
-
-        List<String> roles = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getAuthorities)
-                .map(authorities -> authorities.stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .filter(Objects::nonNull)
-                        .filter(authority -> authority.startsWith("ROLE_"))
-                        .toList())
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        String email = SecurityUtils.currentEmail();
+        List<String> roles = SecurityUtils.currentRoles();
 
         var optionalUser = userRepository.findByEmail(email);
 
@@ -105,10 +85,7 @@ public class UserService {
 
     @Transactional
     public void changeUserType(UserType newUserType) {
-        String email = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        String email = SecurityUtils.currentEmail();
 
         int updated = userRepository.updateUserType(email, newUserType);
         if (updated == 0) {
@@ -132,10 +109,7 @@ public class UserService {
     }
 
     private void enforceLookupRateLimit() {
-        String callerEmail = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        String callerEmail = SecurityUtils.currentEmail();
 
         boolean acquired = rateLimiterService.tryAcquire(
                 "rate-limit:user-lookup:" + callerEmail, MAX_LOOKUPS_PER_HOUR, LOOKUP_RATE_LIMIT_WINDOW);

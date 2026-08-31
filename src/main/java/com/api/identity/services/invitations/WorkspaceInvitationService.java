@@ -13,6 +13,7 @@ import com.api.identity.mappers.WorkspaceInvitationMapper;
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
+import com.api.identity.records.workspaces.WorkspaceSentInvitationDTO;
 import com.api.identity.repositories.WorkspaceInvitationRepository;
 import com.api.identity.services.audit.AuditLogService;
 import com.api.identity.services.ratelimit.RateLimiterService;
@@ -97,6 +98,35 @@ public class WorkspaceInvitationService {
                             CorrelationIdHolder.current()));
                 });
 
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkspaceSentInvitationDTO> getSentInvitations() {
+        var user = userService.getAuthenticatedUser();
+
+        return workspaceInvitationMapper.toSentDTO(
+                workspaceInvitationRepository.findByInvitedByIdOrderByCreatedAtDesc(user.getId()));
+    }
+
+    @Transactional
+    public void cancelInvitation(Long invitationId) {
+        var user = userService.getAuthenticatedUser();
+
+        var invitation = workspaceInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new EntityNotFoundException("Invitación inexistente"));
+
+        if (!invitation.getInvitedBy().getId().equals(user.getId())) {
+            log.warn("El usuario {} intentó cancelar una invitación que no envió (id {})", user.getId(), invitationId);
+            throw new EntityNotFoundException("Invitación inexistente");
+        }
+        if (!InvitationStatus.PENDING.equals(invitation.getStatus())) {
+            throw new BusinessException("Solo se pueden cancelar invitaciones pendientes");
+        }
+
+        invitation.setStatus(InvitationStatus.CANCELLED);
+        workspaceInvitationRepository.save(invitation);
+        auditLogService.record(invitation.getWorkspace(), AuditAction.INVITATION_CANCELLED, user, invitation.getInvitedUser());
+        log.debug("Invitación {} cancelada por {}", invitationId, user.getId());
     }
 
     @Transactional

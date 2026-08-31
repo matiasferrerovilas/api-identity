@@ -12,6 +12,7 @@ import com.api.identity.exceptions.RateLimitExceededException
 import com.api.identity.mappers.WorkspaceInvitationMapper
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO
+import com.api.identity.records.workspaces.WorkspaceSentInvitationDTO
 import com.api.identity.repositories.WorkspaceInvitationRepository
 import com.api.identity.services.audit.AuditLogService
 import com.api.identity.services.invitations.InvitationEventPublisher
@@ -219,5 +220,71 @@ class WorkspaceInvitationServiceTest extends Specification {
 
         then:
         thrown(BusinessException)
+    }
+
+    def "getSentInvitations - returns the authenticated user's sent invitations, most recent first"() {
+        given:
+        def sent = [WorkspaceInvitation.builder().id(7L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
+                .status(InvitationStatus.PENDING).build()]
+        def dto = new WorkspaceSentInvitationDTO(7L, 10L, "Casa", "invited@example.com", InvitationStatus.PENDING, null)
+        userService.getAuthenticatedUser() >> inviter
+        workspaceInvitationRepository.findByInvitedByIdOrderByCreatedAtDesc(1L) >> sent
+        workspaceInvitationMapper.toSentDTO(sent) >> [dto]
+
+        when:
+        def result = service.getSentInvitations()
+
+        then:
+        result == [dto]
+    }
+
+    def "cancelInvitation - marks a pending invitation sent by the caller as CANCELLED"() {
+        given:
+        def invitation = WorkspaceInvitation.builder()
+                .id(5L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
+                .status(InvitationStatus.PENDING).build()
+        userService.getAuthenticatedUser() >> inviter
+        workspaceInvitationRepository.findById(5L) >> Optional.of(invitation)
+
+        when:
+        service.cancelInvitation(5L)
+
+        then:
+        invitation.status == InvitationStatus.CANCELLED
+        1 * workspaceInvitationRepository.save(invitation)
+        1 * auditLogService.record(workspace, AuditAction.INVITATION_CANCELLED, inviter, invited)
+    }
+
+    def "cancelInvitation - throws EntityNotFoundException when the caller did not send the invitation"() {
+        given:
+        def stranger = User.builder().id(99L).email("stranger@example.com").build()
+        def invitation = WorkspaceInvitation.builder()
+                .id(5L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
+                .status(InvitationStatus.PENDING).build()
+        userService.getAuthenticatedUser() >> stranger
+        workspaceInvitationRepository.findById(5L) >> Optional.of(invitation)
+
+        when:
+        service.cancelInvitation(5L)
+
+        then:
+        thrown(EntityNotFoundException)
+        0 * workspaceInvitationRepository.save(_)
+    }
+
+    def "cancelInvitation - throws BusinessException when the invitation was already answered"() {
+        given:
+        def invitation = WorkspaceInvitation.builder()
+                .id(5L).invitedUser(invited).invitedBy(inviter).workspace(workspace)
+                .status(InvitationStatus.ACCEPTED).build()
+        userService.getAuthenticatedUser() >> inviter
+        workspaceInvitationRepository.findById(5L) >> Optional.of(invitation)
+
+        when:
+        service.cancelInvitation(5L)
+
+        then:
+        thrown(BusinessException)
+        0 * workspaceInvitationRepository.save(_)
     }
 }

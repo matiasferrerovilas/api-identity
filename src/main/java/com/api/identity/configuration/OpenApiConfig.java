@@ -6,14 +6,18 @@ import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OpenApiConfig {
 
+    // Antes hardcodeaba .version("1.3.0") acá, desincronizado de build.gradle apenas se bumpeaba
+    // la versión ahí — BuildProperties lo lee de build-info.properties, generado en build time
+    // por springBoot { buildInfo() } (ya configurado), así que no puede volver a desincronizarse.
     @Bean
-    public OpenAPI customOpenAPI() {
+    public OpenAPI customOpenAPI(BuildProperties buildProperties) {
         final String securitySchemeName = "bearerAuth";
 
         return new OpenAPI()
@@ -41,7 +45,7 @@ public class OpenApiConfig {
 
                                 No está expuesto a internet — solo lo consumen api-movements y api-keep.
                                 """)
-                        .version("1.3.0")
+                        .version(buildProperties.getVersion())
                         .contact(new Contact()
                                 .name("API Support")
                                 .email("api-support@movement.eva-core.com")));

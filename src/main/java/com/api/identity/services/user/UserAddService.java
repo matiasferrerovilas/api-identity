@@ -11,13 +11,11 @@ import com.api.identity.records.user.UserMe;
 import com.api.identity.records.user.UserToAdd;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.security.SecurityUtils;
 import com.api.identity.services.api.ApiService;
 import com.api.identity.services.ratelimit.RateLimiterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +23,6 @@ import java.time.Duration;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -50,14 +46,10 @@ public class UserAddService {
 
     @Transactional
     public UserMe createLogInUser(UserToAdd request, String api) {
-        Authentication authentication = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
-
         // El email del JWT es la única fuente confiable de identidad acá — sin este chequeo,
         // cualquier llamador autenticado podía mandar el email de otra persona en el body y
         // colgar su onboarding (y su rate limit) de una cuenta ajena.
-        String authenticatedEmail = authentication.getName();
+        String authenticatedEmail = SecurityUtils.currentEmail();
         if (authenticatedEmail == null || !authenticatedEmail.equalsIgnoreCase(request.email())) {
             throw new PermissionDeniedException("El email no coincide con el de la cuenta autenticada");
         }
@@ -67,11 +59,7 @@ public class UserAddService {
             throw new RateLimitExceededException("Demasiados intentos. Probá de nuevo más tarde.");
         }
 
-        List<String> roles = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .filter(Objects::nonNull)
-                .filter(authority -> authority.startsWith("ROLE_"))
-                .toList();
+        List<String> roles = SecurityUtils.currentRoles();
 
         Set<UserRole> userRoles = roles.stream()
                 .map(UserRole::parse)

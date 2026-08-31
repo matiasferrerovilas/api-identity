@@ -8,17 +8,14 @@ import com.api.identity.records.onboarding.OnboardingStartRequest;
 import com.api.identity.records.onboarding.OnboardingStartResponse;
 import com.api.identity.repositories.OnboardingDoneRepository;
 import com.api.identity.repositories.UserRepository;
+import com.api.identity.security.SecurityUtils;
 import com.api.identity.services.user.UserAddService;
 import com.api.identity.services.user.UserService;
 import com.api.identity.services.workspace.WorkspaceAddService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Optional;
 
 @Service
 @Slf4j
@@ -45,10 +42,7 @@ public class OnboardingService {
 
     @Transactional
     public void markTourAsSeen(String api) {
-        String email = Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-                .filter(Authentication::isAuthenticated)
-                .map(Authentication::getName)
-                .orElseThrow(() -> new PermissionDeniedException("Usuario no autenticado"));
+        String email = SecurityUtils.currentEmail();
 
         int updated = onboardingDoneRepository.markTourAsSeen(email, api);
         if (updated == 0) {

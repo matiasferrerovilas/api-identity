@@ -104,6 +104,13 @@ public class WorkspaceService {
 
     @Transactional(readOnly = true)
     public WorkspaceDTO getWorkspaceDTOById(Long workspaceId) {
+        var user = userService.getAuthenticatedUser();
+        // Sin este chequeo, cualquier usuario autenticado podía pasar cualquier workspaceId y
+        // recibir el owner + la lista completa de emails de los miembros de un workspace ajeno —
+        // a diferencia de cada endpoint hermano en WorkspaceController, este no verificaba
+        // membership antes de devolver datos.
+        workspaceMembershipService.verifyMembership(workspaceId, user.getId());
+
         return workspaceMapper.toDTO(
                 workspaceRepository.findById(workspaceId)
                         .orElseThrow(() -> new EntityNotFoundException("Workspace no encontrado")));

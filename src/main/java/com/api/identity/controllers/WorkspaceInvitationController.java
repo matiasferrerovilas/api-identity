@@ -3,6 +3,7 @@ package com.api.identity.controllers;
 import com.api.identity.records.invitations.AcceptRejectInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
 import com.api.identity.records.workspaces.WorkspaceSendInvitationDTO;
+import com.api.identity.records.workspaces.WorkspaceSentInvitationDTO;
 import com.api.identity.services.invitations.WorkspaceInvitationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -70,6 +72,45 @@ public class WorkspaceInvitationController {
     @ResponseStatus(HttpStatus.OK)
     public void sendInvitation(@PathVariable Long workspaceId, @Valid @RequestBody WorkspaceSendInvitationDTO body) {
         workspaceInvitationService.sendInvitation(workspaceId, body);
+    }
+
+    @Operation(
+            summary = "Obtener invitaciones enviadas",
+            description = "Devuelve todas las invitaciones a workspaces enviadas por el usuario autenticado, "
+                    + "más reciente primero, en cualquier estado.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Invitaciones obtenidas",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = WorkspaceSentInvitationDTO.class)
+                            )
+                    )
+            }
+    )
+    @GetMapping("/sent")
+    @ResponseStatus(HttpStatus.OK)
+    public List<WorkspaceSentInvitationDTO> getSentInvitations() {
+        return workspaceInvitationService.getSentInvitations();
+    }
+
+    @Operation(
+            summary = "Cancelar una invitación enviada",
+            description = "Cancela una invitación pendiente enviada por el usuario autenticado, antes de que el "
+                    + "destinatario la acepte o rechace.",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "Invitación cancelada"),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "Invitación inexistente o no enviada por el usuario autenticado"
+                    )
+            }
+    )
+    @DeleteMapping("/{invitationId}")
+    @ResponseStatus(HttpStatus.OK)
+    public void cancelInvitation(@PathVariable Long invitationId) {
+        workspaceInvitationService.cancelInvitation(invitationId);
     }
 
     @Operation(

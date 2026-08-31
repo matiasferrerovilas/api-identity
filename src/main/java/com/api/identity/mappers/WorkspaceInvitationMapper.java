@@ -2,6 +2,7 @@ package com.api.identity.mappers;
 
 import com.api.identity.entities.WorkspaceInvitation;
 import com.api.identity.records.workspaces.WorkspaceInvitationDTO;
+import com.api.identity.records.workspaces.WorkspaceSentInvitationDTO;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -17,4 +18,11 @@ public interface WorkspaceInvitationMapper {
     WorkspaceInvitationDTO toDTO(WorkspaceInvitation workspaceInvitation);
 
     List<WorkspaceInvitationDTO> toDTO(List<WorkspaceInvitation> workspaceInvitations);
+
+    @Mapping(target = "workspaceId", source = "workspace.id")
+    @Mapping(target = "workspaceName", source = "workspace.name")
+    @Mapping(target = "invitedUserEmail", source = "invitedUser.email")
+    WorkspaceSentInvitationDTO toSentDTO(WorkspaceInvitation workspaceInvitation);
+
+    List<WorkspaceSentInvitationDTO> toSentDTO(List<WorkspaceInvitation> workspaceInvitations);
 }

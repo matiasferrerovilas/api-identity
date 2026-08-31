@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-30
+
 ### Added
 - `GET /v1/users/lookup?email=` (`UserController`) — resolves an email to a user id, 404 if no
   account matches. Wraps the existing `UserService.getUserByEmail(List<String>)` with a
@@ -14,9 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   share target *before* creating the grant (unlike `WorkspaceInvitationService.sendInvitation`,
   which silently drops emails that don't match a registered user — this fails loudly instead, so
   the caller can surface an honest "no account with that email" error).
+- `GET /v1/invitations/sent` and `DELETE /v1/invitations/{invitationId}` — a sender can now list
+  the invitations they've sent (most recent first, any status) and cancel one that's still
+  `PENDING` before the recipient acts on it. New `InvitationStatus.CANCELLED` and
+  `AuditAction.INVITATION_CANCELLED`. Mirrors `acceptRejectInvitation`'s ownership check (404, not
+  403, when the caller didn't send the invitation being cancelled) and its "already answered"
+  guard (`BusinessException` if the invitation isn't `PENDING` anymore). Wired through the
+  api-movements and api-keep gateways (`IdentityClient.getSentInvitations`/`cancelInvitation`) and
+  surfaced in both fe-movements and fe-keep as a "Sent Invitations" card next to the existing
+  pending-invitations one.
 
 ### Security
 
+- `GET /v1/workspaces/{workspaceId}` (`WorkspaceService.getWorkspaceDTOById`) never verified the
+  authenticated user belonged to the requested workspace before returning it — unlike every sibling
+  endpoint in `WorkspaceController`. Any authenticated user of any tenant could enumerate workspace
+  ids and get back the owner plus the full list of member emails. Now calls
+  `workspaceMembershipService.verifyMembership` first, same as `getWorkspaceMembers(Long
+  workspaceId)`.
 - `GET /v1/users/lookup?email=` and `GET /v1/users?ids=` had no rate limit and no requirement to
   share a workspace with the target — any authenticated user of any app in the suite could probe
   arbitrary emails/ids and learn who has an account, a real account-enumeration surface. Now
@@ -41,6 +58,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the unused `spring-boot-starter-oauth2-authorization-server` and
+  `spring-boot-starter-security-oauth2-client` Gradle dependencies — this service only ever acts as
+  an OAuth2 resource server validating Keycloak JWTs, never issues tokens, and is never itself an
+  OAuth2 client. Both classes were dead classpath/native-image weight; the actual resource-server
+  classes in use (`JwtDecoder`, `NimbusJwtDecoder`, `.oauth2ResourceServer()`) were only reachable
+  as a transitive dependency of the authorization-server starter, which no longer holds — replaced
+  with the correct, minimal `spring-boot-starter-oauth2-resource-server` declared directly.
+- New `SecurityUtils` (`com.api.identity.security`) collapses the
+  `SecurityContextHolder.getContext().getAuthentication()...filter(isAuthenticated)...orElseThrow`
+  chain that was copy-pasted 7 times across `UserService` (4x), `OnboardingService`, and
+  `UserAddService` into `currentAuthentication()`/`currentEmail()`/`currentRoles()`. Pure
+  refactor — same `SecurityContextHolder`, same `PermissionDeniedException` on no/unauthenticated
+  principal, no behavior change.
 - `WorkspaceController.deleteWorkspace`/`WorkspaceService.deleteWorkspace` renamed to
   `leaveWorkspace` — the method actually removes the authenticated user's own membership (`DELETE
   /v1/workspaces/{workspaceId}`, unchanged), not the workspace itself; the old name misled readers
