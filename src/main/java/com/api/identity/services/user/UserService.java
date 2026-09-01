@@ -133,18 +133,23 @@ public class UserService {
 
     /** Listado admin-wide: TODOS los usuarios de la instancia (no solo los de un workspace o los
      * pedidos por id como {@link #getUsersByIds}), cada uno con los workspaces activos a los que
-     * pertenece. Protegido a nivel de SecurityConfiguration ({@code /v1/admin/**} → ROLE_ADMIN),
-     * no acá — ver AdminController. */
+     * pertenece y su estado de onboarding/tour por api (independiente de los workspaces — ver
+     * {@link AdminUserSummaryDTO.OnboardingSummary}). Protegido a nivel de SecurityConfiguration
+     * ({@code /v1/admin/**} → ROLE_ADMIN), no acá — ver AdminController. */
     @Transactional(readOnly = true)
     public List<AdminUserSummaryDTO> listAllUsersWithWorkspaces() {
         var membershipsByUserId = workspaceMemberRepository.findAllActiveWithWorkspaceAndUser().stream()
                 .collect(Collectors.groupingBy(m -> m.getUser().getId()));
+        var onboardingByUserId = onboardingDoneRepository.findAllWithUserAndApi().stream()
+                .collect(Collectors.groupingBy(o -> o.getUser().getId()));
 
         return userRepository.findAll().stream()
                 .map(user -> adminUserMapper.toAdminUserSummaryDTO(
                         user,
                         adminUserMapper.toWorkspaceMembershipSummaries(
-                                membershipsByUserId.getOrDefault(user.getId(), Collections.emptyList()))))
+                                membershipsByUserId.getOrDefault(user.getId(), Collections.emptyList())),
+                        adminUserMapper.toOnboardingSummaries(
+                                onboardingByUserId.getOrDefault(user.getId(), Collections.emptyList()))))
                 .toList();
     }
 

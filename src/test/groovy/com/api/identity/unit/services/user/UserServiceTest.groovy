@@ -1,5 +1,7 @@
 package com.api.identity.unit.services.user
 
+import com.api.identity.entities.Api
+import com.api.identity.entities.OnboardingDone
 import com.api.identity.entities.User
 import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceMember
@@ -188,7 +190,7 @@ class UserServiceTest extends Specification {
         0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
     }
 
-    def "listAllUsersWithWorkspaces - groups active memberships by user id and delegates the mapping to AdminUserMapper"() {
+    def "listAllUsersWithWorkspaces - groups active memberships and onboarding by user id and delegates the mapping to AdminUserMapper"() {
         given:
         def alice = User.builder().id(1L).email("alice@example.com").build()
         def bob = User.builder().id(2L).email("bob@example.com").build()
@@ -201,12 +203,17 @@ class UserServiceTest extends Specification {
         def bobInCasa = WorkspaceMember.builder().id(102L).workspace(casa).user(bob).role(WorkspaceRole.READ_ONLY).build()
         workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> [aliceInCasa, aliceInTrabajo, bobInCasa]
 
+        def api = Api.builder().id(1L).name("api-movements").build()
+        def aliceOnboarding = OnboardingDone.builder().id(200L).user(alice).api(api).isFirstLogin(false).hasSeenTour(true).build()
+        onboardingDoneRepository.findAllWithUserAndApi() >> [aliceOnboarding]
+
         // Contenido arbitrario — records, no mocks, así el == de más abajo compara por valor sin
         // depender de que Spock sepa mockear clases final.
         def aliceWorkspaces = [new AdminUserSummaryDTO.WorkspaceMembershipSummary(10L, "Casa", WorkspaceRole.OWNER, null)]
         def bobWorkspaces = [new AdminUserSummaryDTO.WorkspaceMembershipSummary(10L, "Casa", WorkspaceRole.READ_ONLY, null)]
-        def aliceDTO = new AdminUserSummaryDTO(1L, "alice@example.com", null, null, UserType.PERSONAL, [] as Set, null, aliceWorkspaces)
-        def bobDTO = new AdminUserSummaryDTO(2L, "bob@example.com", null, null, UserType.PERSONAL, [] as Set, null, bobWorkspaces)
+        def aliceOnboardingSummaries = [new AdminUserSummaryDTO.OnboardingSummary("api-movements", false, true)]
+        def aliceDTO = new AdminUserSummaryDTO(1L, "alice@example.com", null, null, UserType.PERSONAL, [] as Set, null, aliceWorkspaces, aliceOnboardingSummaries)
+        def bobDTO = new AdminUserSummaryDTO(2L, "bob@example.com", null, null, UserType.PERSONAL, [] as Set, null, bobWorkspaces, [])
 
         when:
         def result = service.listAllUsersWithWorkspaces()
@@ -214,24 +221,28 @@ class UserServiceTest extends Specification {
         then:
         1 * adminUserMapper.toWorkspaceMembershipSummaries([aliceInCasa, aliceInTrabajo]) >> aliceWorkspaces
         1 * adminUserMapper.toWorkspaceMembershipSummaries([bobInCasa]) >> bobWorkspaces
-        1 * adminUserMapper.toAdminUserSummaryDTO(alice, aliceWorkspaces) >> aliceDTO
-        1 * adminUserMapper.toAdminUserSummaryDTO(bob, bobWorkspaces) >> bobDTO
+        1 * adminUserMapper.toOnboardingSummaries([aliceOnboarding]) >> aliceOnboardingSummaries
+        1 * adminUserMapper.toOnboardingSummaries([]) >> []
+        1 * adminUserMapper.toAdminUserSummaryDTO(alice, aliceWorkspaces, aliceOnboardingSummaries) >> aliceDTO
+        1 * adminUserMapper.toAdminUserSummaryDTO(bob, bobWorkspaces, []) >> bobDTO
         result == [aliceDTO, bobDTO]
     }
 
-    def "listAllUsersWithWorkspaces - a user with no memberships gets an empty list passed to the mapper"() {
+    def "listAllUsersWithWorkspaces - a user with no memberships or onboarding gets empty lists passed to the mapper"() {
         given:
         def carol = User.builder().id(3L).email("carol@example.com").build()
         userRepository.findAll() >> [carol]
         workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> []
-        def carolDTO = new AdminUserSummaryDTO(3L, "carol@example.com", null, null, UserType.PERSONAL, [] as Set, null, [])
+        onboardingDoneRepository.findAllWithUserAndApi() >> []
+        def carolDTO = new AdminUserSummaryDTO(3L, "carol@example.com", null, null, UserType.PERSONAL, [] as Set, null, [], [])
 
         when:
         def result = service.listAllUsersWithWorkspaces()
 
         then:
         1 * adminUserMapper.toWorkspaceMembershipSummaries([]) >> []
-        1 * adminUserMapper.toAdminUserSummaryDTO(carol, []) >> carolDTO
+        1 * adminUserMapper.toOnboardingSummaries([]) >> []
+        1 * adminUserMapper.toAdminUserSummaryDTO(carol, [], []) >> carolDTO
         result == [carolDTO]
     }
 

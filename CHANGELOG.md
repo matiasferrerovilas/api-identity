@@ -32,7 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already used for `/actuator/**`. New `WorkspaceMemberRepository.findAllActiveWithWorkspaceAndUser()`
   (join-fetches workspace + user to avoid N+1 across the whole listing). New `AdminUserMapper`
   (MapStruct, same convention as `UserMapper`/`WorkspaceMapper`) does the entity→DTO mapping.
-  Powers the new `/users` view in fe-identity.
+  Response also includes each user's onboarding/tour status per app (`AdminUserSummaryDTO
+  .OnboardingSummary` — deliberately separate from `workspaces`, since onboarding is scoped to
+  (user, api), not to any particular workspace; new `OnboardingDoneRepository
+  .findAllWithUserAndApi()`, same join-fetch-to-avoid-N+1 pattern). Powers the new `/users` view
+  in fe-identity.
 
 ### Fixed
 - `GET /v1/admin/users` threw `HttpMessageNotWritableException` /

@@ -6,11 +6,22 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface OnboardingDoneRepository extends JpaRepository<OnboardingDone, Long> {
     Optional<OnboardingDone> findByUserEmailAndApiName(String email, String api);
+
+    // join fetch de user + api: usado por el listado admin-wide de usuarios, mismo motivo que
+    // WorkspaceMemberRepository.findAllActiveWithWorkspaceAndUser (evitar N+1 al recorrer todos
+    // los usuarios de la instancia).
+    @Query("""
+            select o from OnboardingDone o
+            join fetch o.user u
+            join fetch o.api a
+            """)
+    List<OnboardingDone> findAllWithUserAndApi();
 
     @Modifying
     @Query(value = """

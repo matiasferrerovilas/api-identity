@@ -1,5 +1,6 @@
 package com.api.identity.mappers;
 
+import com.api.identity.entities.OnboardingDone;
 import com.api.identity.entities.User;
 import com.api.identity.entities.WorkspaceMember;
 import com.api.identity.records.admin.AdminUserSummaryDTO;
@@ -19,11 +20,20 @@ public interface AdminUserMapper {
     // de que el método @Transactional ya devolvió y la sesión se cerró).
     @Mapping(target = "userRoles", expression = "java(java.util.Set.copyOf(user.getUserRoles()))")
     @Mapping(target = "workspaces", source = "workspaces")
-    AdminUserSummaryDTO toAdminUserSummaryDTO(User user, List<AdminUserSummaryDTO.WorkspaceMembershipSummary> workspaces);
+    @Mapping(target = "onboarding", source = "onboarding")
+    AdminUserSummaryDTO toAdminUserSummaryDTO(
+            User user,
+            List<AdminUserSummaryDTO.WorkspaceMembershipSummary> workspaces,
+            List<AdminUserSummaryDTO.OnboardingSummary> onboarding);
 
     @Mapping(target = "workspaceId", source = "workspace.id")
     @Mapping(target = "workspaceName", source = "workspace.name")
     AdminUserSummaryDTO.WorkspaceMembershipSummary toWorkspaceMembershipSummary(WorkspaceMember member);
 
     List<AdminUserSummaryDTO.WorkspaceMembershipSummary> toWorkspaceMembershipSummaries(List<WorkspaceMember> members);
+
+    @Mapping(target = "api", source = "api.name")
+    AdminUserSummaryDTO.OnboardingSummary toOnboardingSummary(OnboardingDone onboardingDone);
+
+    List<AdminUserSummaryDTO.OnboardingSummary> toOnboardingSummaries(List<OnboardingDone> onboardingDone);
 }

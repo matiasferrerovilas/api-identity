@@ -23,12 +23,22 @@ public record AdminUserSummaryDTO(
         UserType userType,
         Set<UserRole> userRoles,
         LocalDateTime createdAt,
-        List<WorkspaceMembershipSummary> workspaces) implements Serializable {
+        List<WorkspaceMembershipSummary> workspaces,
+        List<OnboardingSummary> onboarding) implements Serializable {
 
     public record WorkspaceMembershipSummary(
             Long workspaceId,
             String workspaceName,
             WorkspaceRole role,
             LocalDateTime joinedAt) implements Serializable {
+    }
+
+    /** Ojo: el onboarding/tour es por (usuario, api) — api-movements y api-keep se onboardean
+     * por separado — no está atado a ningún workspace puntual, a diferencia de
+     * {@link WorkspaceMembershipSummary}. */
+    public record OnboardingSummary(
+            String api,
+            boolean isFirstLogin,
+            boolean hasSeenTour) implements Serializable {
     }
 }
