@@ -7,6 +7,7 @@ import com.api.identity.enums.UserType;
 import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.RateLimitExceededException;
+import com.api.identity.mappers.AdminUserMapper;
 import com.api.identity.mappers.UserMapper;
 import com.api.identity.records.admin.AdminUserSummaryDTO;
 import com.api.identity.records.user.UserLookupDTO;
@@ -42,6 +43,7 @@ public class UserService {
     private final OnboardingDoneRepository onboardingDoneRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserMapper userMapper;
+    private final AdminUserMapper adminUserMapper;
     private final RateLimiterService rateLimiterService;
 
     @Transactional(readOnly = true)
@@ -139,21 +141,10 @@ public class UserService {
                 .collect(Collectors.groupingBy(m -> m.getUser().getId()));
 
         return userRepository.findAll().stream()
-                .map(user -> new AdminUserSummaryDTO(
-                        user.getId(),
-                        user.getEmail(),
-                        user.getGivenName(),
-                        user.getFamilyName(),
-                        user.getUserType(),
-                        user.getUserRoles(),
-                        user.getCreatedAt(),
-                        membershipsByUserId.getOrDefault(user.getId(), Collections.emptyList()).stream()
-                                .map(m -> new AdminUserSummaryDTO.WorkspaceMembershipSummary(
-                                        m.getWorkspace().getId(),
-                                        m.getWorkspace().getName(),
-                                        m.getRole(),
-                                        m.getJoinedAt()))
-                                .toList()))
+                .map(user -> adminUserMapper.toAdminUserSummaryDTO(
+                        user,
+                        adminUserMapper.toWorkspaceMembershipSummaries(
+                                membershipsByUserId.getOrDefault(user.getId(), Collections.emptyList()))))
                 .toList();
     }
 

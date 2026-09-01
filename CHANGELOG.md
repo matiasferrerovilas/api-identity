@@ -21,6 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   crashed prod, `NotificationRecord`) and proactively in api-keep. Not reproducible in this
   environment (no native compiler); needs confirmation via a real native-image container rebuild.
 
+## [1.7.0] - 2026-09-01
+
+### Added
+- New `AdminController` (`/v1/admin`), `GET /v1/admin/users` — lists every user in the instance
+  along with the active workspaces each one belongs to and their role in each. Didn't exist
+  before: `GET /v1/users` needs ids up front and `GET /v1/workspaces/members` only returns the
+  authenticated caller's own workspaces — there was no admin-wide view. Secured with
+  `.requestMatchers("/v1/admin/**").hasRole("ADMIN")` in `SecurityConfiguration`, same pattern
+  already used for `/actuator/**`. New `WorkspaceMemberRepository.findAllActiveWithWorkspaceAndUser()`
+  (join-fetches workspace + user to avoid N+1 across the whole listing). New `AdminUserMapper`
+  (MapStruct, same convention as `UserMapper`/`WorkspaceMapper`) does the entity→DTO mapping.
+  Powers the new `/users` view in fe-identity.
+
+### Fixed
+- `GET /v1/admin/users` threw `HttpMessageNotWritableException` /
+  `LazyInitializationException` on `User.userRoles` (`@ElementCollection(fetch = LAZY)`) —
+  Jackson serializes the response *after* the `@Transactional` method returns and its Hibernate
+  session closes, so just passing the lazy `Set` reference into the DTO wasn't enough.
+  `AdminUserMapper` now does `Set.copyOf(user.getUserRoles())`, forcing the collection to load
+  while the session is still open.
+
 ## [1.6.0] - 2026-08-31
 
 ### Added

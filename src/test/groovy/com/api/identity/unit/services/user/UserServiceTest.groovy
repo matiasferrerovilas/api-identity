@@ -10,7 +10,9 @@ import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
 import com.api.identity.exceptions.PermissionDeniedException
 import com.api.identity.exceptions.RateLimitExceededException
+import com.api.identity.mappers.AdminUserMapper
 import com.api.identity.mappers.UserMapper
+import com.api.identity.records.admin.AdminUserSummaryDTO
 import com.api.identity.records.user.UserMe
 import com.api.identity.repositories.OnboardingDoneRepository
 import com.api.identity.repositories.UserRepository
@@ -31,10 +33,11 @@ class UserServiceTest extends Specification {
     OnboardingDoneRepository onboardingDoneRepository = Mock(OnboardingDoneRepository)
     WorkspaceMemberRepository workspaceMemberRepository = Mock(WorkspaceMemberRepository)
     UserMapper userMapper = Mock(UserMapper)
+    AdminUserMapper adminUserMapper = Mock(AdminUserMapper)
     RateLimiterService rateLimiterService = Mock(RateLimiterService)
 
     UserService service = new UserService(
-            userRepository, onboardingDoneRepository, workspaceMemberRepository, userMapper, rateLimiterService)
+            userRepository, onboardingDoneRepository, workspaceMemberRepository, userMapper, adminUserMapper, rateLimiterService)
 
     def setup() {
         authenticateAs("caller@example.com")
@@ -185,12 +188,10 @@ class UserServiceTest extends Specification {
         0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
     }
 
-    def "listAllUsersWithWorkspaces - includes every user, grouping their active memberships by user id"() {
+    def "listAllUsersWithWorkspaces - groups active memberships by user id and delegates the mapping to AdminUserMapper"() {
         given:
-        def alice = User.builder().id(1L).email("alice@example.com").givenName("Alice")
-                .userType(UserType.PERSONAL).userRoles([UserRole.ROLE_ADMIN] as Set).build()
-        def bob = User.builder().id(2L).email("bob@example.com").givenName("Bob")
-                .userType(UserType.PERSONAL).userRoles([UserRole.ROLE_FAMILY] as Set).build()
+        def alice = User.builder().id(1L).email("alice@example.com").build()
+        def bob = User.builder().id(2L).email("bob@example.com").build()
         userRepository.findAll() >> [alice, bob]
 
         def casa = Workspace.builder().id(10L).name("Casa").build()
@@ -200,32 +201,38 @@ class UserServiceTest extends Specification {
         def bobInCasa = WorkspaceMember.builder().id(102L).workspace(casa).user(bob).role(WorkspaceRole.READ_ONLY).build()
         workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> [aliceInCasa, aliceInTrabajo, bobInCasa]
 
+        // Contenido arbitrario — records, no mocks, así el == de más abajo compara por valor sin
+        // depender de que Spock sepa mockear clases final.
+        def aliceWorkspaces = [new AdminUserSummaryDTO.WorkspaceMembershipSummary(10L, "Casa", WorkspaceRole.OWNER, null)]
+        def bobWorkspaces = [new AdminUserSummaryDTO.WorkspaceMembershipSummary(10L, "Casa", WorkspaceRole.READ_ONLY, null)]
+        def aliceDTO = new AdminUserSummaryDTO(1L, "alice@example.com", null, null, UserType.PERSONAL, [] as Set, null, aliceWorkspaces)
+        def bobDTO = new AdminUserSummaryDTO(2L, "bob@example.com", null, null, UserType.PERSONAL, [] as Set, null, bobWorkspaces)
+
         when:
         def result = service.listAllUsersWithWorkspaces()
 
         then:
-        result.size() == 2
-        def aliceSummary = result.find { it.id() == 1L }
-        aliceSummary.email() == "alice@example.com"
-        aliceSummary.workspaces().size() == 2
-        aliceSummary.workspaces()*.workspaceName().toSet() == ["Casa", "Trabajo"].toSet()
-        def bobSummary = result.find { it.id() == 2L }
-        bobSummary.workspaces().size() == 1
-        bobSummary.workspaces()[0].role() == WorkspaceRole.READ_ONLY
+        1 * adminUserMapper.toWorkspaceMembershipSummaries([aliceInCasa, aliceInTrabajo]) >> aliceWorkspaces
+        1 * adminUserMapper.toWorkspaceMembershipSummaries([bobInCasa]) >> bobWorkspaces
+        1 * adminUserMapper.toAdminUserSummaryDTO(alice, aliceWorkspaces) >> aliceDTO
+        1 * adminUserMapper.toAdminUserSummaryDTO(bob, bobWorkspaces) >> bobDTO
+        result == [aliceDTO, bobDTO]
     }
 
-    def "listAllUsersWithWorkspaces - a user with no memberships gets an empty workspaces list"() {
+    def "listAllUsersWithWorkspaces - a user with no memberships gets an empty list passed to the mapper"() {
         given:
-        def carol = User.builder().id(3L).email("carol@example.com").userType(UserType.PERSONAL).build()
+        def carol = User.builder().id(3L).email("carol@example.com").build()
         userRepository.findAll() >> [carol]
         workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> []
+        def carolDTO = new AdminUserSummaryDTO(3L, "carol@example.com", null, null, UserType.PERSONAL, [] as Set, null, [])
 
         when:
         def result = service.listAllUsersWithWorkspaces()
 
         then:
-        result.size() == 1
-        result[0].workspaces() == []
+        1 * adminUserMapper.toWorkspaceMembershipSummaries([]) >> []
+        1 * adminUserMapper.toAdminUserSummaryDTO(carol, []) >> carolDTO
+        result == [carolDTO]
     }
 
     private static void authenticateAs(String email) {
