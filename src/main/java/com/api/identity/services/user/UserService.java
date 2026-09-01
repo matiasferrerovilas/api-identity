@@ -8,6 +8,7 @@ import com.api.identity.exceptions.BusinessException;
 import com.api.identity.exceptions.EntityNotFoundException;
 import com.api.identity.exceptions.RateLimitExceededException;
 import com.api.identity.mappers.UserMapper;
+import com.api.identity.records.admin.AdminUserSummaryDTO;
 import com.api.identity.records.user.UserLookupDTO;
 import com.api.identity.records.user.UserMe;
 import com.api.identity.repositories.OnboardingDoneRepository;
@@ -21,7 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -124,6 +127,34 @@ public class UserService {
 
     public List<User> getUserByEmail(List<String> emails) {
         return userRepository.findByEmail(emails);
+    }
+
+    /** Listado admin-wide: TODOS los usuarios de la instancia (no solo los de un workspace o los
+     * pedidos por id como {@link #getUsersByIds}), cada uno con los workspaces activos a los que
+     * pertenece. Protegido a nivel de SecurityConfiguration ({@code /v1/admin/**} → ROLE_ADMIN),
+     * no acá — ver AdminController. */
+    @Transactional(readOnly = true)
+    public List<AdminUserSummaryDTO> listAllUsersWithWorkspaces() {
+        var membershipsByUserId = workspaceMemberRepository.findAllActiveWithWorkspaceAndUser().stream()
+                .collect(Collectors.groupingBy(m -> m.getUser().getId()));
+
+        return userRepository.findAll().stream()
+                .map(user -> new AdminUserSummaryDTO(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getGivenName(),
+                        user.getFamilyName(),
+                        user.getUserType(),
+                        user.getUserRoles(),
+                        user.getCreatedAt(),
+                        membershipsByUserId.getOrDefault(user.getId(), Collections.emptyList()).stream()
+                                .map(m -> new AdminUserSummaryDTO.WorkspaceMembershipSummary(
+                                        m.getWorkspace().getId(),
+                                        m.getWorkspace().getName(),
+                                        m.getRole(),
+                                        m.getJoinedAt()))
+                                .toList()))
+                .toList();
     }
 
     /** Used by other services (e.g. api-keep, before creating a user-to-user file share) to

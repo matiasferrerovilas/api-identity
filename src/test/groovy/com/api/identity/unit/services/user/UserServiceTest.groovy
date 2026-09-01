@@ -3,6 +3,8 @@ package com.api.identity.unit.services.user
 import com.api.identity.entities.User
 import com.api.identity.entities.Workspace
 import com.api.identity.entities.WorkspaceMember
+import com.api.identity.enums.UserRole
+import com.api.identity.enums.UserType
 import com.api.identity.enums.WorkspaceRole
 import com.api.identity.exceptions.BusinessException
 import com.api.identity.exceptions.EntityNotFoundException
@@ -181,6 +183,49 @@ class UserServiceTest extends Specification {
         then:
         result.metadata().workspaceRole() == null
         0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
+    }
+
+    def "listAllUsersWithWorkspaces - includes every user, grouping their active memberships by user id"() {
+        given:
+        def alice = User.builder().id(1L).email("alice@example.com").givenName("Alice")
+                .userType(UserType.PERSONAL).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def bob = User.builder().id(2L).email("bob@example.com").givenName("Bob")
+                .userType(UserType.PERSONAL).userRoles([UserRole.ROLE_FAMILY] as Set).build()
+        userRepository.findAll() >> [alice, bob]
+
+        def casa = Workspace.builder().id(10L).name("Casa").build()
+        def trabajo = Workspace.builder().id(11L).name("Trabajo").build()
+        def aliceInCasa = WorkspaceMember.builder().id(100L).workspace(casa).user(alice).role(WorkspaceRole.OWNER).build()
+        def aliceInTrabajo = WorkspaceMember.builder().id(101L).workspace(trabajo).user(alice).role(WorkspaceRole.COLLABORATOR).build()
+        def bobInCasa = WorkspaceMember.builder().id(102L).workspace(casa).user(bob).role(WorkspaceRole.READ_ONLY).build()
+        workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> [aliceInCasa, aliceInTrabajo, bobInCasa]
+
+        when:
+        def result = service.listAllUsersWithWorkspaces()
+
+        then:
+        result.size() == 2
+        def aliceSummary = result.find { it.id() == 1L }
+        aliceSummary.email() == "alice@example.com"
+        aliceSummary.workspaces().size() == 2
+        aliceSummary.workspaces()*.workspaceName().toSet() == ["Casa", "Trabajo"].toSet()
+        def bobSummary = result.find { it.id() == 2L }
+        bobSummary.workspaces().size() == 1
+        bobSummary.workspaces()[0].role() == WorkspaceRole.READ_ONLY
+    }
+
+    def "listAllUsersWithWorkspaces - a user with no memberships gets an empty workspaces list"() {
+        given:
+        def carol = User.builder().id(3L).email("carol@example.com").userType(UserType.PERSONAL).build()
+        userRepository.findAll() >> [carol]
+        workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> []
+
+        when:
+        def result = service.listAllUsersWithWorkspaces()
+
+        then:
+        result.size() == 1
+        result[0].workspaces() == []
     }
 
     private static void authenticateAs(String email) {

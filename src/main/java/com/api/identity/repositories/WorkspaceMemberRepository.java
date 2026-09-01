@@ -22,6 +22,17 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
             """)
     List<WorkspaceMember> findByWorkspaceOwnerOrMember(@Param("userId") Long userId);
 
+    // join fetch de workspace + user: usado por el listado admin-wide de usuarios, que arma un
+    // resumen para TODOS los usuarios de la instancia — sin esto, cada acceso a m.getWorkspace()/
+    // m.getUser() en el loop dispararía una query lazy por fila (N+1).
+    @Query("""
+            select m from WorkspaceMember m
+            join fetch m.workspace w
+            join fetch m.user u
+            where w.isActive = true
+            """)
+    List<WorkspaceMember> findAllActiveWithWorkspaceAndUser();
+
     boolean existsByWorkspaceIdAndUserId(Long workspaceId, Long userId);
 
     Optional<WorkspaceMember> findByWorkspaceIdAndUserId(Long workspaceId, Long userId);
