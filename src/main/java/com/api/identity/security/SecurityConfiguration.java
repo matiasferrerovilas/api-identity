@@ -46,6 +46,7 @@ public class SecurityConfiguration {
                         ).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus", "/actuator/metrics").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
+                        .requestMatchers("/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/v1/onboarding/**").hasAnyRole("ADMIN", "FAMILY", "GUEST")
                         .anyRequest().authenticated())
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
