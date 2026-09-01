@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-01
+
+### Fixed
+- New `WebBindingRuntimeHints` (wired via `@ImportRuntimeHints` on `UserApplication`) registers
+  reflection for the three RabbitMQ-only event records — `InvitationCreatedEvent`,
+  `InvitationAcceptedEvent`, `MemberRemovedEvent`. These are published solely through
+  `RabbitTemplate.convertAndSend` (generic `Object`) and never returned from a `@RestController`,
+  so Spring's AOT scan never discovered them and they had no reflection metadata in the native
+  image. Under GraalVM's closed world that surfaces at runtime as
+  `UnsupportedFeatureError: Record components not available` when the event is first serialized —
+  never in tests, which run on the JVM. Same gap already fixed in api-movements (where it actually
+  crashed prod, `NotificationRecord`) and proactively in api-keep. Not reproducible in this
+  environment (no native compiler); needs confirmation via a real native-image container rebuild.
+
 ## [1.6.0] - 2026-08-31
 
 ### Added
