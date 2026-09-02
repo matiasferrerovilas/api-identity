@@ -109,6 +109,7 @@ All endpoints are under `/v1` and require a valid Keycloak-issued JWT unless not
 | DELETE | `/v1/workspaces/{workspaceId}` | Leave a workspace (removes the caller's own membership) |
 | PATCH | `/v1/workspaces/{workspaceId}/transfer-ownership` | Transfer workspace ownership to another member |
 | DELETE | `/v1/workspaces/{workspaceId}/members/{userId}` | Remove a member from a workspace |
+| PATCH | `/v1/workspaces/{workspaceId}/members/{userId}/role` | Change a member's role (COLLABORATOR/READ_ONLY only) |
 | GET | `/v1/workspaces/{workspaceId}/audit-log` | Workspace audit log — invites, accept/reject, join, leave (most recent first) |
 | GET | `/v1/invitations` | List invitations |
 | POST | `/v1/invitations/{workspaceId}` | Invite a user to a workspace (rate-limited) |

@@ -454,4 +454,110 @@ class WorkspaceMembershipServiceTest extends Specification {
         thrown(EntityNotFoundException)
         0 * workspaceMemberRepository.save(_)
     }
+
+    def "changeRole - OWNER changes a COLLABORATOR to READ_ONLY and records a MEMBER_ROLE_CHANGED audit entry"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.OWNER).build()
+        def targetUser = User.builder().id(3L).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(targetUser).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.changeRole(1L, actor, 3L, WorkspaceRole.READ_ONLY)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == targetMembership && m.role == WorkspaceRole.READ_ONLY })
+        1 * auditLogService.record(workspace, AuditAction.MEMBER_ROLE_CHANGED, actor, targetUser)
+    }
+
+    def "changeRole - a global admin who is not a member can change any member's role"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def admin = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(User.builder().id(3L).build()).role(WorkspaceRole.READ_ONLY).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
+
+        when:
+        service.changeRole(1L, admin, 3L, WorkspaceRole.COLLABORATOR)
+
+        then:
+        1 * workspaceMemberRepository.save({ WorkspaceMember m -> m == targetMembership && m.role == WorkspaceRole.COLLABORATOR })
+    }
+
+    def "changeRole - throws PermissionDeniedException when the actor tries to change their own role"() {
+        given:
+        def actor = User.builder().id(2L).build()
+
+        when:
+        service.changeRole(1L, actor, 2L, WorkspaceRole.READ_ONLY)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "changeRole - throws PermissionDeniedException when trying to assign OWNER"() {
+        given:
+        def actor = User.builder().id(2L).build()
+
+        when:
+        service.changeRole(1L, actor, 3L, WorkspaceRole.OWNER)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+        0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L)
+    }
+
+    def "changeRole - throws EntityNotFoundException when the target does not belong to the workspace"() {
+        given:
+        def actor = User.builder().id(2L).build()
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.empty()
+
+        when:
+        service.changeRole(1L, actor, 3L, WorkspaceRole.READ_ONLY)
+
+        then:
+        thrown(EntityNotFoundException)
+    }
+
+    def "changeRole - throws PermissionDeniedException when the target is currently OWNER"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(User.builder().id(3L).build()).role(WorkspaceRole.OWNER).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+
+        when:
+        service.changeRole(1L, actor, 3L, WorkspaceRole.READ_ONLY)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+    }
+
+    def "changeRole - a plain COLLABORATOR without ROLE_ADMIN cannot change roles"() {
+        given:
+        def workspace = Workspace.builder().id(1L).build()
+        def actor = User.builder().id(2L).build()
+        def actorMembership = WorkspaceMember.builder().id(10L).workspace(workspace).user(actor).role(WorkspaceRole.COLLABORATOR).build()
+        def targetMembership = WorkspaceMember.builder().id(11L).workspace(workspace).user(User.builder().id(3L).build()).role(WorkspaceRole.COLLABORATOR).build()
+
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 3L) >> Optional.of(targetMembership)
+        workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(actorMembership)
+
+        when:
+        service.changeRole(1L, actor, 3L, WorkspaceRole.READ_ONLY)
+
+        then:
+        thrown(PermissionDeniedException)
+        0 * workspaceMemberRepository.save(_)
+    }
 }

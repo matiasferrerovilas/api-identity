@@ -99,6 +99,12 @@ public class WorkspaceService {
         workspaceMembershipService.transferOwnership(workspaceId, actor, newOwnerUserId);
     }
 
+    @Transactional
+    public void changeMemberRole(Long workspaceId, Long targetUserId, WorkspaceRole newRole) {
+        var actor = userService.getAuthenticatedUser();
+        workspaceMembershipService.changeRole(workspaceId, actor, targetUserId, newRole);
+    }
+
     @Transactional(readOnly = true)
     public List<AuditLogDTO> getWorkspaceAuditLog(Long workspaceId) {
         var user = userService.getAuthenticatedUser();

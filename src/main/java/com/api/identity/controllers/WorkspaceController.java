@@ -5,6 +5,7 @@ import com.api.identity.records.workspaces.AddWorkspaceRecord;
 import com.api.identity.records.workspaces.WorkspaceAdded;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
+import com.api.identity.records.workspaces.ChangeMemberRoleDTO;
 import com.api.identity.records.workspaces.TransferOwnershipDTO;
 import com.api.identity.services.workspace.WorkspaceAddService;
 import com.api.identity.services.workspace.WorkspaceMembershipService;
@@ -208,6 +209,35 @@ public class WorkspaceController {
     @ResponseStatus(HttpStatus.OK)
     public void removeMember(@PathVariable Long workspaceId, @PathVariable Long userId) {
         workspaceService.removeMember(workspaceId, userId);
+    }
+
+    @Operation(
+            summary = "Cambiar el rol de un miembro",
+            description = "Cambia el rol (COLLABORATOR/READ_ONLY) de un miembro que ya está en el workspace. "
+                    + "No sirve para asignar ni para cambiar el rol de un OWNER — para eso usá "
+                    + "transferir titularidad. Requiere que quien invoca sea el OWNER del workspace o tenga "
+                    + "el rol global ROLE_ADMIN.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Rol actualizado"
+                    ),
+                    @ApiResponse(
+                            responseCode = "403",
+                            description = "Quien invoca no es OWNER ni administrador, intenta cambiar su propio rol, "
+                                    + "intenta asignar OWNER, o el usuario indicado ya es OWNER"
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "El usuario indicado no pertenece al workspace"
+                    )
+            }
+    )
+    @PatchMapping("/{workspaceId}/members/{userId}/role")
+    @ResponseStatus(HttpStatus.OK)
+    public void changeMemberRole(@PathVariable Long workspaceId, @PathVariable Long userId,
+                                  @Valid @RequestBody ChangeMemberRoleDTO dto) {
+        workspaceService.changeMemberRole(workspaceId, userId, dto.newRole());
     }
 
     @Operation(

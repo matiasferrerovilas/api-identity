@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-02
+
+### Added
+- New `PATCH /v1/workspaces/{workspaceId}/members/{userId}/role` — changes an existing member's
+  role between `COLLABORATOR`/`READ_ONLY`. Deliberately can't assign or change `OWNER` through
+  this endpoint (use transfer-ownership for that); requires OWNER of the workspace or
+  `ROLE_ADMIN`. New `MEMBER_ROLE_CHANGED` audit action, recorded like every other membership
+  change.
+
 ## [1.6.1] - 2026-09-01
 
 ### Fixed

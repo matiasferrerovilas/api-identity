@@ -163,4 +163,40 @@ public class WorkspaceMembershipService {
         log.info("Usuario {} transfirió la titularidad del workspace {} a {}",
                 actor.getEmail(), workspaceId, newOwnerMembership.getUser().getEmail());
     }
+
+    /** Cambia el rol (COLLABORATOR/READ_ONLY) de un miembro que ya está en el workspace. OWNER
+     * queda deliberadamente fuera de acá en los dos sentidos — ni se puede ASIGNAR (eso lo hace
+     * transferOwnership, que además degrada al OWNER anterior) ni se puede CAMBIAR el rol de quien
+     * ya es OWNER (mismo motivo: dejaría el workspace sin dueño si no se degrada a alguien más). */
+    public void changeRole(Long workspaceId, User actor, Long targetUserId, WorkspaceRole newRole) {
+        if (actor.getId().equals(targetUserId)) {
+            throw new PermissionDeniedException("No podés cambiar tu propio rol");
+        }
+
+        if (newRole == WorkspaceRole.OWNER) {
+            throw new PermissionDeniedException("Para asignar OWNER usá transferir titularidad, no este endpoint");
+        }
+
+        var targetMembership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
+                .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"));
+
+        if (targetMembership.getRole() == WorkspaceRole.OWNER) {
+            throw new PermissionDeniedException("El OWNER no puede degradarse por acá — transferí la titularidad primero");
+        }
+
+        boolean isAdmin = actor.getUserRoles().contains(UserRole.ROLE_ADMIN);
+        var actorMembership = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, actor.getId());
+        boolean isOwner = actorMembership.map(m -> m.getRole() == WorkspaceRole.OWNER).orElse(false);
+
+        if (!isOwner && !isAdmin) {
+            throw new PermissionDeniedException("Solo el OWNER del workspace o un administrador pueden cambiar roles");
+        }
+
+        targetMembership.setRole(newRole);
+        workspaceMemberRepository.save(targetMembership);
+
+        auditLogService.record(targetMembership.getWorkspace(), AuditAction.MEMBER_ROLE_CHANGED, actor, targetMembership.getUser());
+        log.info("Usuario {} cambió el rol de {} a {} en el workspace {}",
+                actor.getEmail(), targetMembership.getUser().getEmail(), newRole, workspaceId);
+    }
 }
