@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-02
+
+### Fixed
+- `POST /v1/invitations/{workspaceId}` threw `LazyInitializationException` on `User.userRoles`
+  from `WorkspaceMembershipService.requireAtLeastCollaborator` — reproduced live from
+  fe-identity, inviting to a workspace the admin isn't a member of. Root cause was different
+  from the earlier `AdminUserMapper` one (same symptom, different mechanism): `sendInvitation`
+  had no `@Transactional` of its own, so `userService.getAuthenticatedUser()` (its own separate
+  `@Transactional(readOnly = true)`) opened and closed its own session before returning — the
+  `User` it returned was already detached by the time the ROLE_ADMIN-bypass check (added for
+  this same feature) tried to read `userRoles` a few lines later inside a *different* transaction
+  (`verifyCanInvite`'s). `WorkspaceService.removeMember`/`transferOwnership` never hit this
+  despite having the identical `userRoles.contains(ROLE_ADMIN)` check, because those methods are
+  themselves `@Transactional` — `getAuthenticatedUser()` joins their already-open transaction
+  instead of opening a separate one. Fixed two ways: added `@Transactional` to `sendInvitation`
+  (matches the pattern every other multi-step service method already follows), and — since this
+  is now the *second* distinct `LazyInitializationException` this exact collection has caused —
+  changed `User.userRoles` from `FetchType.LAZY` to `EAGER`. It's a tiny, always-needed-for-
+  permission-checks collection; not worth the lazy-loading footgun. Not verified against a real
+  Hibernate session in this environment (existing unit tests mock the repository layer and build
+  plain `User` POJOs, which never exercise real lazy-loading/detachment) — confirm on your next
+  live rebuild.
+
 ## [1.9.0] - 2026-09-02
 
 ### Added

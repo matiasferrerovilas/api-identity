@@ -64,7 +64,12 @@ public class User {
     @Column(name = "user_type", nullable = false, length = 50)
     private UserType userType;
 
-    @ElementCollection(fetch = FetchType.LAZY)
+    // EAGER a propósito: es una colección chica (a lo sumo 3 valores) que casi todo chequeo de
+    // permisos en el codebase necesita leer de inmediato (OnboardingService,
+    // WorkspaceMembershipService, AdminUserMapper...). LAZY causó dos LazyInitializationException
+    // distintas — un User que cruza un límite transaccional (queda detached) siempre termina
+    // necesitando esto tarde o temprano, así que no vale la pena la carga diferida acá.
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 50)

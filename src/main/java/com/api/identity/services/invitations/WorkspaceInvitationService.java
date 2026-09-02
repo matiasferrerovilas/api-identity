@@ -58,6 +58,15 @@ public class WorkspaceInvitationService {
                 workspaceInvitationRepository.findByInvitedUserIdAndStatus(user.getId(), InvitationStatus.PENDING));
     }
 
+    // Sin @Transactional acá, getAuthenticatedUser() (su propio @Transactional(readOnly=true))
+    // abre y cierra una transacción propia, y el User que devuelve queda detached antes de que
+    // verifyCanInvite (otra transacción separada, más abajo) intente leer su colección lazy
+    // userRoles — eso tiraba LazyInitializationException. Con @Transactional acá, todas las
+    // llamadas anidadas (incluida getAuthenticatedUser) se unen a esta misma transacción/sesión
+    // en vez de abrir la suya — mismo patrón que WorkspaceService.removeMember/transferOwnership,
+    // que ya eran @Transactional y por eso nunca pegaron este bug pese a tener el mismo chequeo
+    // de userRoles.contains(ROLE_ADMIN).
+    @Transactional
     public void sendInvitation(Long workspaceId, @Valid WorkspaceSendInvitationDTO body) {
         var user = userService.getAuthenticatedUser();
 
