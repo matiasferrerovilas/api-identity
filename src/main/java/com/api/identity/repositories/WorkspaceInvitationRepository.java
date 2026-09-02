@@ -18,4 +18,6 @@ public interface WorkspaceInvitationRepository extends JpaRepository<WorkspaceIn
 
     List<WorkspaceInvitation> findByInvitedByIdOrderByCreatedAtDesc(Long invitedById);
 
+    long countByStatus(InvitationStatus status);
+
 }

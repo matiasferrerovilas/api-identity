@@ -9,6 +9,7 @@ The shared identity and workspace service for the M2 suite. Handles user auto-pr
 - **Invitations**: invite a user to a workspace by email, accept/decline, rate-limited per user (10 invitation batches/hour) to prevent abuse
 - **Onboarding**: track first-login and product-tour completion per user
 - **Audit log**: who invited, accepted/rejected, joined, or left a workspace, queryable per workspace (`OWNER`/`COLLABORATOR` only)
+- **Admin summary**: instance-wide counts (users, workspaces, workspaces created this month, pending invitations) for the fe-identity admin dashboard (`ROLE_ADMIN` only)
 - **Rate limiting**: Redis-backed, applied to invitation-sending and user creation (20/hour), fails open if Redis is unavailable
 - **Cross-app events**: invitation and workspace events published to RabbitMQ, consumed by api-movements and api-keep
 - **User authentication**: Keycloak OAuth2 / JWT (RS256) resource server

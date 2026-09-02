@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -31,4 +32,8 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     List<Workspace> findByUserIn(@Param("userId") Long userId);
 
     List<Workspace> findAllByIsActiveTrue();
+
+    long countByIsActiveTrue();
+
+    long countByIsActiveTrueAndCreatedAtGreaterThanEqual(LocalDateTime from);
 }

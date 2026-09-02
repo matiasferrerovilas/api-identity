@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-02
+
+### Added
+- New `GET /v1/admin/summary` — aggregate counts for fe-identity's admin dashboard: total users,
+  total active workspaces, workspaces created this month, and pending invitations across the
+  whole instance. New `AdminSummaryService` plus count queries on `WorkspaceRepository`
+  (`countByIsActiveTrue`, `countByIsActiveTrueAndCreatedAtGreaterThanEqual`) and
+  `WorkspaceInvitationRepository` (`countByStatus`). No new endpoints needed for the audit-log
+  tab or workspace creation added to fe-identity in this round — both already had backend support
+  (`GET /v1/workspaces/{workspaceId}/audit-log`, `POST /v1/workspaces`).
+
 ## [1.8.0] - 2026-09-02
 
 ### Added

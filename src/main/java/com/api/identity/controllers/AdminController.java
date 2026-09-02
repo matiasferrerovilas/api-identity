@@ -1,7 +1,9 @@
 package com.api.identity.controllers;
 
+import com.api.identity.records.admin.AdminSummaryDTO;
 import com.api.identity.records.admin.AdminUserSummaryDTO;
 import com.api.identity.records.admin.AdminWorkspaceSummaryDTO;
+import com.api.identity.services.admin.AdminSummaryService;
 import com.api.identity.services.user.UserService;
 import com.api.identity.services.workspace.WorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +31,7 @@ public class AdminController {
 
     private final UserService userService;
     private final WorkspaceService workspaceService;
+    private final AdminSummaryService adminSummaryService;
 
     @Operation(
             summary = "Listar todos los usuarios y sus workspaces",
@@ -66,5 +69,23 @@ public class AdminController {
     @GetMapping("/workspaces")
     public List<AdminWorkspaceSummaryDTO> listWorkspaces() {
         return workspaceService.listAllWorkspacesWithMembers();
+    }
+
+    @Operation(
+            summary = "Números agregados de la instancia",
+            description = "Totales para la portada del panel admin: usuarios, workspaces activos, "
+                    + "workspaces creados este mes e invitaciones pendientes en toda la instancia.",
+            responses = @ApiResponse(
+                    responseCode = "200",
+                    description = "Resumen obtenido",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = AdminSummaryDTO.class)
+                    )
+            )
+    )
+    @GetMapping("/summary")
+    public AdminSummaryDTO getSummary() {
+        return adminSummaryService.getSummary();
     }
 }
