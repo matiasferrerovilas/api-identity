@@ -4,8 +4,10 @@ import com.api.identity.entities.Workspace;
 import com.api.identity.enums.AuditAction;
 import com.api.identity.enums.WorkspaceRole;
 import com.api.identity.exceptions.EntityNotFoundException;
+import com.api.identity.mappers.AdminWorkspaceMapper;
 import com.api.identity.mappers.WorkspaceMapper;
 import com.api.identity.mappers.WorkspaceMemberMapper;
+import com.api.identity.records.admin.AdminWorkspaceSummaryDTO;
 import com.api.identity.records.audit.AuditLogDTO;
 import com.api.identity.records.workspaces.WorkspaceDTO;
 import com.api.identity.records.workspaces.WorkspaceMemberDTO;
@@ -18,7 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -29,6 +33,7 @@ public class WorkspaceService {
     private final WorkspaceMapper workspaceMapper;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final WorkspaceMemberMapper workspaceMemberMapper;
+    private final AdminWorkspaceMapper adminWorkspaceMapper;
     private final UserService userService;
     private final WorkspaceMembershipService workspaceMembershipService;
     private final AuditLogService auditLogService;
@@ -97,9 +102,26 @@ public class WorkspaceService {
     @Transactional(readOnly = true)
     public List<AuditLogDTO> getWorkspaceAuditLog(Long workspaceId) {
         var user = userService.getAuthenticatedUser();
-        workspaceMembershipService.verifyCanViewAuditLog(workspaceId, user.getId());
+        workspaceMembershipService.verifyCanViewAuditLog(workspaceId, user);
 
         return auditLogService.getByWorkspace(workspaceId);
+    }
+
+    /** Listado admin-wide: TODOS los workspaces activos de la instancia, cada uno con sus
+     * miembros y el rol de cada uno — la contracara de
+     * {@link UserService#listAllUsersWithWorkspaces()}. Protegido a nivel de
+     * SecurityConfiguration ({@code /v1/admin/**} → ROLE_ADMIN), no acá — ver AdminController. */
+    @Transactional(readOnly = true)
+    public List<AdminWorkspaceSummaryDTO> listAllWorkspacesWithMembers() {
+        var membersByWorkspaceId = workspaceMemberRepository.findAllActiveWithWorkspaceAndUser().stream()
+                .collect(Collectors.groupingBy(m -> m.getWorkspace().getId()));
+
+        return workspaceRepository.findAllByIsActiveTrue().stream()
+                .map(workspace -> adminWorkspaceMapper.toAdminWorkspaceSummaryDTO(
+                        workspace,
+                        adminWorkspaceMapper.toMemberSummaries(
+                                membersByWorkspaceId.getOrDefault(workspace.getId(), Collections.emptyList()))))
+                .toList();
     }
 
     @Transactional(readOnly = true)

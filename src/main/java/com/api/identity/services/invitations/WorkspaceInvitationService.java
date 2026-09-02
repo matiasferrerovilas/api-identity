@@ -71,7 +71,7 @@ public class WorkspaceInvitationService {
                     "Alcanzaste el límite de invitaciones enviadas. Probá de nuevo más tarde.");
         }
 
-        workspaceMembershipService.verifyCanInvite(workspaceId, user.getId());
+        workspaceMembershipService.verifyCanInvite(workspaceId, user);
         var workspaceToInvite = workspaceService.findWorkspaceById(workspaceId);
 
         userService.getUserByEmail(body.emails())

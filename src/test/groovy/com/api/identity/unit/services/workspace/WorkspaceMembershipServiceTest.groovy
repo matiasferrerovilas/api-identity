@@ -58,11 +58,12 @@ class WorkspaceMembershipServiceTest extends Specification {
     @Unroll
     def "verifyCanInvite - allows role #role to invite"() {
         given:
+        def actor = User.builder().id(2L).build()
         def member = WorkspaceMember.builder().role(role).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(member)
 
         when:
-        service.verifyCanInvite(1L, 2L)
+        service.verifyCanInvite(1L, actor)
 
         then:
         noExceptionThrown()
@@ -73,11 +74,12 @@ class WorkspaceMembershipServiceTest extends Specification {
 
     def "verifyCanInvite - blocks READ_ONLY members from inviting"() {
         given:
+        def actor = User.builder().id(2L).build()
         def member = WorkspaceMember.builder().role(WorkspaceRole.READ_ONLY).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(member)
 
         when:
-        service.verifyCanInvite(1L, 2L)
+        service.verifyCanInvite(1L, actor)
 
         then:
         thrown(PermissionDeniedException)
@@ -85,23 +87,37 @@ class WorkspaceMembershipServiceTest extends Specification {
 
     def "verifyCanInvite - throws EntityNotFoundException when the user is not a member"() {
         given:
+        def actor = User.builder().id(2L).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
 
         when:
-        service.verifyCanInvite(1L, 2L)
+        service.verifyCanInvite(1L, actor)
 
         then:
         thrown(EntityNotFoundException)
     }
 
+    def "verifyCanInvite - a global admin who is not a member can invite anyway"() {
+        given:
+        def actor = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+
+        when:
+        service.verifyCanInvite(1L, actor)
+
+        then:
+        noExceptionThrown()
+        0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
+    }
+
     @Unroll
     def "verifyCanViewAuditLog - allows role #role to view"() {
         given:
+        def actor = User.builder().id(2L).build()
         def member = WorkspaceMember.builder().role(role).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(member)
 
         when:
-        service.verifyCanViewAuditLog(1L, 2L)
+        service.verifyCanViewAuditLog(1L, actor)
 
         then:
         noExceptionThrown()
@@ -112,11 +128,12 @@ class WorkspaceMembershipServiceTest extends Specification {
 
     def "verifyCanViewAuditLog - blocks READ_ONLY members from viewing"() {
         given:
+        def actor = User.builder().id(2L).build()
         def member = WorkspaceMember.builder().role(WorkspaceRole.READ_ONLY).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.of(member)
 
         when:
-        service.verifyCanViewAuditLog(1L, 2L)
+        service.verifyCanViewAuditLog(1L, actor)
 
         then:
         thrown(PermissionDeniedException)
@@ -124,13 +141,26 @@ class WorkspaceMembershipServiceTest extends Specification {
 
     def "verifyCanViewAuditLog - throws EntityNotFoundException when the user is not a member"() {
         given:
+        def actor = User.builder().id(2L).build()
         workspaceMemberRepository.findByWorkspaceIdAndUserId(1L, 2L) >> Optional.empty()
 
         when:
-        service.verifyCanViewAuditLog(1L, 2L)
+        service.verifyCanViewAuditLog(1L, actor)
 
         then:
         thrown(EntityNotFoundException)
+    }
+
+    def "verifyCanViewAuditLog - a global admin who is not a member can view anyway"() {
+        given:
+        def actor = User.builder().id(2L).userRoles([UserRole.ROLE_ADMIN] as Set).build()
+
+        when:
+        service.verifyCanViewAuditLog(1L, actor)
+
+        then:
+        noExceptionThrown()
+        0 * workspaceMemberRepository.findByWorkspaceIdAndUserId(_, _)
     }
 
     @Unroll

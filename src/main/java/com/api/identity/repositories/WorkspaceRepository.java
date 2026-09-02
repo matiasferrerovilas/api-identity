@@ -29,4 +29,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
             where m.user.id = :userId
             """)
     List<Workspace> findByUserIn(@Param("userId") Long userId);
+
+    List<Workspace> findAllByIsActiveTrue();
 }

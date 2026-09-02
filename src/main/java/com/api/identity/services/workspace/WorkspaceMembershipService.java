@@ -38,19 +38,27 @@ public class WorkspaceMembershipService {
     }
 
     @Transactional(readOnly = true)
-    public void verifyCanInvite(Long workspaceId, Long userId) {
-        this.requireAtLeastCollaborator(workspaceId, userId,
+    public void verifyCanInvite(Long workspaceId, User actor) {
+        this.requireAtLeastCollaborator(workspaceId, actor,
                 "Los miembros de solo lectura no pueden invitar a otros usuarios");
     }
 
     @Transactional(readOnly = true)
-    public void verifyCanViewAuditLog(Long workspaceId, Long userId) {
-        this.requireAtLeastCollaborator(workspaceId, userId,
+    public void verifyCanViewAuditLog(Long workspaceId, User actor) {
+        this.requireAtLeastCollaborator(workspaceId, actor,
                 "Los miembros de solo lectura no pueden ver la auditoría del workspace");
     }
 
-    private void requireAtLeastCollaborator(Long workspaceId, Long userId, String deniedMessage) {
-        WorkspaceRole role = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
+    /** ROLE_ADMIN puede invitar/ver auditoría en cualquier workspace, sea o no miembro — mismo
+     * bypass que ya tienen removeMembership/transferOwnership. Sin esto, un administrador
+     * gestionando workspaces ajenos desde fe-identity (donde lo normal es NO ser miembro del
+     * workspace que está administrando) se encontraba con un 404 acá. */
+    private void requireAtLeastCollaborator(Long workspaceId, User actor, String deniedMessage) {
+        if (actor.getUserRoles().contains(UserRole.ROLE_ADMIN)) {
+            return;
+        }
+
+        WorkspaceRole role = workspaceMemberRepository.findByWorkspaceIdAndUserId(workspaceId, actor.getId())
                 .orElseThrow(() -> new EntityNotFoundException("El usuario no pertenece al workspace indicado"))
                 .getRole();
 

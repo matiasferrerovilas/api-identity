@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (user, api), not to any particular workspace; new `OnboardingDoneRepository
   .findAllWithUserAndApi()`, same join-fetch-to-avoid-N+1 pattern). Powers the new `/users` view
   in fe-identity.
+- `GET /v1/admin/workspaces` — the reverse view: every active workspace with its members and each
+  one's role, powering the new `/workspaces` view in fe-identity. New `AdminWorkspaceMapper`
+  (MapStruct) and `WorkspaceRepository.findAllByIsActiveTrue()`; reuses the same
+  `findAllActiveWithWorkspaceAndUser()` join-fetch as the users endpoint, just grouped by
+  workspace id instead of user id.
 
 ### Fixed
 - `GET /v1/admin/users` threw `HttpMessageNotWritableException` /
@@ -45,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session closes, so just passing the lazy `Set` reference into the DTO wasn't enough.
   `AdminUserMapper` now does `Set.copyOf(user.getUserRoles())`, forcing the collection to load
   while the session is still open.
+- `WorkspaceMembershipService.requireAtLeastCollaborator` (backing both `verifyCanInvite` and
+  `verifyCanViewAuditLog`) required the caller to already be a member of the target workspace —
+  fine for the normal fe-movements/fe-keep flow (you invite/view-audit-log on your own
+  workspaces), but a ROLE_ADMIN using fe-identity to invite someone to *any* workspace is
+  typically not a member of it, and got a 404. Added the same ROLE_ADMIN bypass
+  `removeMembership`/`transferOwnership` already had; `verifyCanInvite`/`verifyCanViewAuditLog`
+  now take the full `User` instead of just an id so the bypass can check `userRoles`.
 
 ## [1.6.0] - 2026-08-31
 

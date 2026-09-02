@@ -1,7 +1,9 @@
 package com.api.identity.controllers;
 
 import com.api.identity.records.admin.AdminUserSummaryDTO;
+import com.api.identity.records.admin.AdminWorkspaceSummaryDTO;
 import com.api.identity.services.user.UserService;
+import com.api.identity.services.workspace.WorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,6 +28,7 @@ import java.util.List;
 public class AdminController {
 
     private final UserService userService;
+    private final WorkspaceService workspaceService;
 
     @Operation(
             summary = "Listar todos los usuarios y sus workspaces",
@@ -45,5 +48,23 @@ public class AdminController {
     @GetMapping("/users")
     public List<AdminUserSummaryDTO> listUsers() {
         return userService.listAllUsersWithWorkspaces();
+    }
+
+    @Operation(
+            summary = "Listar todos los workspaces y sus miembros",
+            description = "Devuelve todos los workspaces activos de la instancia, cada uno con sus "
+                    + "miembros y el rol de cada uno — la contracara de GET /v1/admin/users.",
+            responses = @ApiResponse(
+                    responseCode = "200",
+                    description = "Workspaces obtenidos",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = AdminWorkspaceSummaryDTO.class)
+                    )
+            )
+    )
+    @GetMapping("/workspaces")
+    public List<AdminWorkspaceSummaryDTO> listWorkspaces() {
+        return workspaceService.listAllWorkspacesWithMembers();
     }
 }

@@ -73,7 +73,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))
 
         then:
-        1 * workspaceMembershipService.verifyCanInvite(10L, 1L)
+        1 * workspaceMembershipService.verifyCanInvite(10L, inviter)
         1 * invitationEventPublisher.publishInvitationCreated({ it.invitedUserEmail() == "invited@example.com" })
         1 * auditLogService.record(workspace, AuditAction.INVITATION_SENT, inviter, invited)
     }
@@ -118,7 +118,7 @@ class WorkspaceInvitationServiceTest extends Specification {
         given:
         userService.getAuthenticatedUser() >> inviter
         rateLimiterService.tryAcquire(_, _, _) >> true
-        workspaceMembershipService.verifyCanInvite(10L, 1L) >> { throw new PermissionDeniedException("Los miembros de solo lectura no pueden invitar a otros usuarios") }
+        workspaceMembershipService.verifyCanInvite(10L, inviter) >> { throw new PermissionDeniedException("Los miembros de solo lectura no pueden invitar a otros usuarios") }
 
         when:
         service.sendInvitation(10L, new WorkspaceSendInvitationDTO(10L, ["invited@example.com"], WorkspaceRole.COLLABORATOR))

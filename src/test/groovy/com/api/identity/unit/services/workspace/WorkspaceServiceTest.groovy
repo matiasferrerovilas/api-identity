@@ -6,8 +6,10 @@ import com.api.identity.entities.WorkspaceMember
 import com.api.identity.enums.AuditAction
 import com.api.identity.enums.WorkspaceRole
 import com.api.identity.exceptions.EntityNotFoundException
+import com.api.identity.mappers.AdminWorkspaceMapper
 import com.api.identity.mappers.WorkspaceMapper
 import com.api.identity.mappers.WorkspaceMemberMapper
+import com.api.identity.records.admin.AdminWorkspaceSummaryDTO
 import com.api.identity.records.audit.AuditLogDTO
 import com.api.identity.records.workspaces.WorkspaceDTO
 import com.api.identity.repositories.WorkspaceMemberRepository
@@ -24,6 +26,7 @@ class WorkspaceServiceTest extends Specification {
     WorkspaceMapper workspaceMapper = Mock(WorkspaceMapper)
     WorkspaceMemberRepository workspaceMemberRepository = Mock(WorkspaceMemberRepository)
     WorkspaceMemberMapper workspaceMemberMapper = Mock(WorkspaceMemberMapper)
+    AdminWorkspaceMapper adminWorkspaceMapper = Mock(AdminWorkspaceMapper)
     UserService userService = Mock(UserService)
     WorkspaceMembershipService workspaceMembershipService = Mock(WorkspaceMembershipService)
     AuditLogService auditLogService = Mock(AuditLogService)
@@ -33,6 +36,7 @@ class WorkspaceServiceTest extends Specification {
             workspaceMapper,
             workspaceMemberRepository,
             workspaceMemberMapper,
+            adminWorkspaceMapper,
             userService,
             workspaceMembershipService,
             auditLogService)
@@ -128,7 +132,7 @@ class WorkspaceServiceTest extends Specification {
         def result = service.getWorkspaceAuditLog(10L)
 
         then:
-        1 * workspaceMembershipService.verifyCanViewAuditLog(10L, 1L)
+        1 * workspaceMembershipService.verifyCanViewAuditLog(10L, owner)
         result.size() == 1
     }
 
@@ -160,5 +164,48 @@ class WorkspaceServiceTest extends Specification {
         then:
         thrown(EntityNotFoundException)
         0 * workspaceRepository.findById(_)
+    }
+
+    def "listAllWorkspacesWithMembers - groups active memberships by workspace id and delegates the mapping to AdminWorkspaceMapper"() {
+        given:
+        def casa = Workspace.builder().id(10L).name("Casa").build()
+        def trabajo = Workspace.builder().id(11L).name("Trabajo").build()
+        workspaceRepository.findAllByIsActiveTrue() >> [casa, trabajo]
+
+        def aliceInCasa = WorkspaceMember.builder().id(100L).workspace(casa).user(owner).role(WorkspaceRole.OWNER).build()
+        def bobInCasa = WorkspaceMember.builder().id(101L).workspace(casa).user(User.builder().id(2L).build()).role(WorkspaceRole.READ_ONLY).build()
+        workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> [aliceInCasa, bobInCasa]
+
+        // Contenido arbitrario — records, no mocks, así el == de más abajo compara por valor sin
+        // depender de que Spock sepa mockear clases final.
+        def casaMembers = [new AdminWorkspaceSummaryDTO.MemberSummary(1L, "owner@example.com", null, null, WorkspaceRole.OWNER, null)]
+        def casaDTO = new AdminWorkspaceSummaryDTO(10L, "Casa", null, casaMembers)
+        def trabajoDTO = new AdminWorkspaceSummaryDTO(11L, "Trabajo", null, [])
+
+        when:
+        def result = service.listAllWorkspacesWithMembers()
+
+        then:
+        1 * adminWorkspaceMapper.toMemberSummaries([aliceInCasa, bobInCasa]) >> casaMembers
+        1 * adminWorkspaceMapper.toMemberSummaries([]) >> []
+        1 * adminWorkspaceMapper.toAdminWorkspaceSummaryDTO(casa, casaMembers) >> casaDTO
+        1 * adminWorkspaceMapper.toAdminWorkspaceSummaryDTO(trabajo, []) >> trabajoDTO
+        result == [casaDTO, trabajoDTO]
+    }
+
+    def "listAllWorkspacesWithMembers - a workspace with no members gets an empty list passed to the mapper"() {
+        given:
+        def empty = Workspace.builder().id(12L).name("Vacío").build()
+        workspaceRepository.findAllByIsActiveTrue() >> [empty]
+        workspaceMemberRepository.findAllActiveWithWorkspaceAndUser() >> []
+        def emptyDTO = new AdminWorkspaceSummaryDTO(12L, "Vacío", null, [])
+
+        when:
+        def result = service.listAllWorkspacesWithMembers()
+
+        then:
+        1 * adminWorkspaceMapper.toMemberSummaries([]) >> []
+        1 * adminWorkspaceMapper.toAdminWorkspaceSummaryDTO(empty, []) >> emptyDTO
+        result == [emptyDTO]
     }
 }
